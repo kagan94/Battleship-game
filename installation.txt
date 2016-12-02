@@ -1,0 +1,21 @@
+
+
+Before start the application, you must have installed:
+- Erlang (erlang.org/download.html)
+- RabbitMQ (https://www.rabbitmq.com/download.html)
+- and run RabbitMQ on localhost on standart port (5672)
+
+
+To run RabbitMQ, you need to run the command in terminal "rabbitmq-server"
+You can access RabbitMQ on:
+http://localhost:15672     (default credentials: guest / guest)
+
+######
+Using in terminal "rabbitmqctl list_queues" will print queues
+
+
+To use 'rabbitmqadmin':
+Download rabbitmqadmin from here http://localhost:15672/cli/, rename to "*.py" extenstion and run in terminal "py -2 rabbitmqadmin.py
+To show msgs in particular queue call "py -2 rabbitmqadmin get queue=queue_name"
+
+######
