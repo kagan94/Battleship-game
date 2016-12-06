@@ -1,5 +1,6 @@
 
 SEP = "|"  # separate command and data in request
+SEP_DATA = ":"
 # TIMEOUT = 5  # in seconds
 
 
@@ -13,16 +14,16 @@ COMMAND = enum(
     CREATE_NEW_GAME='2',
     JOIN_EXISTING_GAME='3',
 
-    PLACE_SHIP='2',
-    MAKE_HIT='4',
+    PLACE_SHIP='4',
+    MAKE_HIT='5',
 
-    DISCONNECT_FROM_GAME='5',
-    QUIT_FROM_GAME='6',  # after quit, user can't go back to the game
+    DISCONNECT_FROM_GAME='6',
+    QUIT_FROM_GAME='7',  # after quit, user can't go back to the game
 
     # New funcs - only for owner
-    START_GAME='2',
-    RESTART_GAME='2',  # when the game ended
-    INVITE_PLAYERS='2',
+    START_GAME='8',
+    RESTART_GAME='9',  # when the game ended
+    INVITE_PLAYERS='10',
 
     # Notifications from the server
     # NOTIFICATION=enum(
@@ -37,7 +38,9 @@ COMMAND = enum(
 RESP = enum(
     OK='0',
     FAIL='1',
-    NICKNAME_ALREADY_EXISTS='2'
+    NICKNAME_ALREADY_EXISTS='2',
+    SHOT_WAS_ALREADY_MADE_HERE='3',
+    MAP_NAME_ALREADY_EXISTS='4'
 )
 
 
@@ -71,6 +74,14 @@ def pack_resp(command, resp_code, data=""):
     return SEP.join([command, resp_code, data])
 
 
+def pack_data(data):
+    '''
+    :param data: (list) of values to pack
+    :return: (str) - packed data joined by SEP_DATA separator
+    '''
+    return SEP_DATA.join(data)
+
+
 def parse_query(raw_data):
     '''
     :param raw_data: string that may contain command and data
@@ -81,11 +92,20 @@ def parse_query(raw_data):
     return command, data
 
 
-def parse_response(raw_data):
+def parse_response(raw_response):
     '''
     :param raw_data: string that may contain command and data
     :return: (command, data)
     '''
     # Split string by separator to get the command and data
-    command, resp_code, data = raw_data.split(SEP)
+    command, resp_code, data = raw_response.split(SEP)
     return command, resp_code, data
+
+
+def parse_data(raw_data):
+    '''
+    :param raw_data: (str)
+    :return: (list)
+    '''
+    # Split string by SEP_DATA separator to get data list from raw_data
+    return raw_data.split(SEP_DATA)
