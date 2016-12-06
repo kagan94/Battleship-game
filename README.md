@@ -1,10 +1,15 @@
 # Battleship-game
 
+## Already DONE:
+* Establish sql connection + create basic structure of DB 
+
 ## TODO Server:
-* sql?
+* If nickname doesn't exist, register it in DB
 
 ## TODO Client:
 * create a local config to store player nickname
+* Create OOP structure of 
+* Create Async MQ consumer (via Threads with separate connection)
 
 ## TODO GUI:
 * form to create a nickname
@@ -15,4 +20,4 @@
 * spectator mode
 
 
-![SQL db scatch](http://clip2net.com/clip/m527982/8af70-clip-25kb.png)
+![SQL db scatch](http://clip2net.com/clip/m527982/38a21-clip-37kb.png)
