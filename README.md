@@ -11,13 +11,25 @@
 * Notify admin about joining a new player (server)
 * Join existing game (client, server)
 * make a shot simple functionallity (client, server)
+* added parser for server name (server)
+* server was rewritten in OOP way
+* deleted unneccessary table "invitations" (models, sql)
+* add table "server" (db)
+* add new server name in db or get existing server_id (server, models)
+* rewrite queries with server_id (client, server)
 
 ## TODO Server:
+* place player ships randomly
 * add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in register_hit function)
 * if ship sank, send notification to all players in this game
 * notify next player if hit = 0
 
+* (!) delete msg about presence in "servers_online" when server goes off-line (ask Artem)
+
+
 ## TODO Client:
+* list of available servers
+* rewrite queries with chosen server_id
 
 
 ## TODO GUI:
@@ -25,8 +37,7 @@
 * form to create a new field + size of field
 * create random ships locations on the map
 * show the map of ships location for player
-* show the global map (with other opponents)
 * spectator mode
 
 
-![SQL db scatch](http://clip2net.com/clip/m527982/a642e-clip-43kb.png)
+![SQL db scatch](http://clip2net.com/clip/m527982/98592-clip-43kb.png)

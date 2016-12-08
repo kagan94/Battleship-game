@@ -66,10 +66,8 @@ class Client(object):
 
     nickname = None
 
-    response = None
-    corr_ids = {}
-
     temp_queue = None
+    chosen_server_id = None
 
     def __init__(self):
         # Open connection with RabbitMQ server
@@ -95,7 +93,7 @@ class Client(object):
             # Blocks until the thread finished the work
             reg_me_thread.join()
 
-        print self.nickname + "111"
+        # print self.nickname + "111"
 
         # Wait until user enters normal nickname
         while self.nickname is None:
@@ -103,7 +101,12 @@ class Client(object):
 
         print "Nickname exists"
 
-        if self.nickname:
+        # TODO: add list of available servers which player can choose
+        self.available_servers()
+
+        self.server_id = '1'
+
+        if self.nickname and self.server_id:
 
             # Declare queue to put requests
             request_queue = 'req_' + self.nickname
@@ -138,6 +141,7 @@ class Client(object):
 
         # "durable" means that queue won't be lost even if RabbitMQ restarts
         self.channel.queue_declare(queue='register_nickname', durable=True)
+        self.channel.queue_declare(queue='servers_online', durable=True)
 
     def close_connection(self):
         self.connection.close()
@@ -205,7 +209,7 @@ class Client(object):
         '''
 
         # Put query into MQ to register a new game
-        query = pack_query(command=COMMAND.CREATE_NEW_GAME, data=game_name)
+        query = pack_query(COMMAND.CREATE_NEW_GAME, self.server_id, data=game_name)
         self.send_request(query)
 
     def join_game(self, map_id):
@@ -216,7 +220,7 @@ class Client(object):
         '''
 
         # Put query into MQ to join existing game
-        query = pack_query(COMMAND.JOIN_EXISTING_GAME, map_id)
+        query = pack_query(COMMAND.JOIN_EXISTING_GAME, self.server_id, map_id)
         self.send_request(query)
 
     def register_hit(self, map_id, target_row, target_column):
@@ -229,15 +233,25 @@ class Client(object):
         '''
 
         data = pack_data([map_id, target_row, target_column])
-        query = pack_query(COMMAND.MAKE_HIT, data)
+        query = pack_query(COMMAND.MAKE_HIT, self.server_id, data)
 
         # Put query to register a new hit
         self.send_request(query)
 
+    def available_servers(self):
+        '''
+        :return: (list) of serves in state on-line
+        '''
+        servers = []
+
+        # TODO: Request to get server online
+
+        return servers
+
     # Handlers ========================================================================
     def on_resp_reg_me(self, channel, method, props, body):
         ''' Handler to receive response on request reg_me '''
-        command, resp_code, data = parse_response(body)
+        command, resp_code, server_id, data = parse_response(body)
 
         if resp_code == RESP.OK:
             print "Nickname was registered successfully"
@@ -275,9 +289,10 @@ class Client(object):
         # command = self.corr_ids[props.correlation_id]
         # del self.corr_ids[props.correlation_id]
 
-        command, resp_code, data = parse_response(body)
+        command, resp_code, server_id, data = parse_response(body)
 
-        print ">> Received resp(%s) on command: %s" % (error_code_to_string(resp_code), command_to_str(command))
+        print ">> Received resp(%s) on command: %s, server(%s)"\
+              % (error_code_to_string(resp_code), command_to_str(command), server_id)
 
         if command == COMMAND.CREATE_NEW_GAME:
             pass
@@ -357,6 +372,7 @@ class Client(object):
     def notifications_loop(self):
         connection = pika.BlockingConnection(pika.ConnectionParameters(virtual_host=MQ_HOST))
         channel = connection.channel()
+
 
         # Bind trigger to response queue
         resp_queue = "resp_" + self.nickname

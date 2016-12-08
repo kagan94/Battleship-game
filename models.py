@@ -4,43 +4,16 @@
 from playhouse.pool import PooledMySQLDatabase
 from peewee import *
 import datetime
-from bottle import hook
-from pymysql import OperationalError
 
 # Establish connection to our DB
-
 # db = MySQLDatabase('battleship', user='root', password='')
 # db.connect()
-
-# 'my_app',
-    # max_connections=32,
-    # stale_timeout=300,  # 5 minutes.
-    # user='postgres'
-
 
 db = PooledMySQLDatabase('battleship',**{
             "user": "root", "passwd": "",
             "max_connections":20, "stale_timeout":None,
             "threadlocals":True
         })
-
-
-# db.connect()
-
-
-# class MyRetryDB(OperationalError, MySQLDatabase):
-
-
-
-
-# @hook('before_request')
-# def _connect_db():
-#     db.connect()
-#
-# @hook('after_request')
-# def _close_db():
-#     if not db.is_closed():
-#         db.close()
 
 
 class BaseModel(Model):
@@ -57,8 +30,17 @@ class Player(BaseModel):
         return "Player's id:%s, nickname:%s" % (self.id, self.nickname)
 
 
+class Server(BaseModel):
+    server_id = IntegerField(primary_key=True)
+    name = CharField()
+
+    def __str__(self):
+        return "Server's id:%s, name:%s" % (self.id, self.name)
+
+
 class Map(BaseModel):
     map_id = IntegerField(primary_key=True)
+    server = ForeignKeyField(Server)
     owner = ForeignKeyField(Player)
     name = CharField()
     rows = IntegerField()
@@ -66,8 +48,8 @@ class Map(BaseModel):
     game_started = IntegerField()
 
     def __str__(self):
-        return "Map_id:%s, owner:%s, map_name:%s, rows:%s, columns:%s, game_started: %s"\
-               % (self.map_id, self.owner.nickname, self.name, self.rows, self.columns, self.game_started)
+        return "Map_id:%s, server_name:%s, owner:%s, map_name:%s, rows:%s, columns:%s, game_started: %s"\
+               % (self.map_id, self.server.name, self.owner.nickname, self.name, self.rows, self.columns, self.game_started)
 
 
 class Player_to_map(BaseModel):
@@ -115,15 +97,15 @@ class Player_hits(BaseModel):
                   self.time, self.hit)
 
 
-class Invitation(BaseModel):
-    invitation_id = IntegerField()
-    map = ForeignKeyField(Map)
-    initiator = ForeignKeyField(Player, related_name='initiator')
-    invited_player = ForeignKeyField(Player, related_name='invited_player')
-
-    def __str__(self):
-        return "invitation_id:%s, map_id:%s, initiator:%s, invited_player:%s" \
-               % (self.invitation_id, self.map_id, self.initiator.nickname, self.invited_player.nickname)
-
-    class Meta:
-        primary_key = CompositeKey('invitation', 'map', 'initiator', 'invited_player')
+# class Invitation(BaseModel):
+#     invitation_id = IntegerField()
+#     map = ForeignKeyField(Map)
+#     initiator = ForeignKeyField(Player, related_name='initiator')
+#     invited_player = ForeignKeyField(Player, related_name='invited_player')
+#
+#     def __str__(self):
+#         return "invitation_id:%s, map_id:%s, initiator:%s, invited_player:%s" \
+#                % (self.invitation_id, self.map_id, self.initiator.nickname, self.invited_player.nickname)
+#
+#     class Meta:
+#         primary_key = CompositeKey('invitation', 'map', 'initiator', 'invited_player')

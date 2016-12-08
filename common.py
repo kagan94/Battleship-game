@@ -41,7 +41,9 @@ COMMAND = enum(
         YOUR_SHIP_WAS_DAMAGED='22',
         YOUR_SHIP_SANK='23',
         SOMEONES_SHIP_SANK='24',
-        YOUR_TURN_TO_MOVE='25'
+        YOUR_TURN_TO_MOVE='25',
+
+        SERVER_ONLINE='26'
     )
 )
 
@@ -131,24 +133,27 @@ def command_to_str(command):
         text = "Notif. Another player damaged another player's ship"
     elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
         text = "Notif. My turn to move"
+    elif command == COMMAND.NOTIFICATION.SERVER_ONLINE:
+        text = "Notif. Server become online"
 
     return text
 
 
-def pack_query(command, data=""):
+def pack_query(command, server_id="", data=""):
+    '''
+    :param data: (list) to pack
+    :param server_id: (str) server_id that should process request
+    :return: packed elements from the list separated by separator
+    '''
+    return SEP.join([command, server_id, data])
+
+
+def pack_resp(command, resp_code, server_id="", data=""):
     '''
     :param data: (list) to pack
     :return: packed elements from the list separated by separator
     '''
-    return SEP.join([command, data])
-
-
-def pack_resp(command, resp_code, data=""):
-    '''
-    :param data: (list) to pack
-    :return: packed elements from the list separated by separator
-    '''
-    return SEP.join([command, resp_code, data])
+    return SEP.join([command, resp_code, server_id, data])
 
 
 def pack_data(data):
@@ -165,8 +170,8 @@ def parse_query(raw_data):
     :return: (command, data)
     '''
     # Split string by separator to get the command and data
-    command, data = raw_data.split(SEP)
-    return command, data
+    server_id, command, data = raw_data.split(SEP)
+    return server_id, command, data
 
 
 def parse_response(raw_response):
@@ -175,8 +180,8 @@ def parse_response(raw_response):
     :return: (command, data)
     '''
     # Split string by separator to get the command and data
-    command, resp_code, data = raw_response.split(SEP)
-    return command, resp_code, data
+    command, resp_code, server_id, data = raw_response.split(SEP)
+    return command, resp_code, server_id, data
 
 
 def parse_data(raw_data):
