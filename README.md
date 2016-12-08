@@ -8,6 +8,9 @@
 * save user nickname locally (client)
 * Create OOP structure (client)
 * Create Async MQ consumer (via Threads with separate connection)
+* Notify admin about joining a new player (server)
+* Join existing game (client, server)
+* make a shot simple functionallity (client, server)
 
 ## TODO Server:
 * add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in register_hit function)

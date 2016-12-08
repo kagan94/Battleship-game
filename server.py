@@ -16,27 +16,31 @@ from models import *
 from common import *
 
 
-
 # TODO: delete in final version
-# import requests
-#
-# def rest_queue_list(user='guest', password='guest', host='localhost', port=15672, virtual_host="localhost"):
-#     url = 'http://%s:%s/api/queues/%s' % (host, port, virtual_host or '')
-#     response = requests.get(url, auth=(user, password))
-#     queues = [q['name'] for q in response.json()]
-#     return queues
 
-# connection = pika.BlockingConnection(pika.ConnectionParameters(virtual_host=MQ_HOST))
-# channel = connection.channel()
-#
-# for queue_name in rest_queue_list():
-#     channel.queue_delete(queue=queue_name)
-#
-# connection.close()
+def DELETE_ALL_QUEUES():
+    import requests
+
+    def rest_queue_list(user='guest', password='guest', host='localhost', port=15672, virtual_host="localhost"):
+        url = 'http://%s:%s/api/queues/%s' % (host, port, virtual_host or '')
+        response = requests.get(url, auth=(user, password))
+        queues = [q['name'] for q in response.json()]
+        return queues
+    #
+    connection = pika.BlockingConnection(pika.ConnectionParameters(virtual_host=MQ_HOST))
+    channel = connection.channel()
+
+    for queue_name in rest_queue_list():
+        channel.queue_delete(queue=queue_name)
+
+    connection.close()
+# DELETE_ALL_QUEUES()
 
 
 def refresh_db_connection(f):
-    ''' It's a decorator to refresh DB connection '''
+    '''
+        It's a decorator to refresh DB connection
+    '''
     def tmp(*args, **kwargs):
         # It's fix to avoid error "MySQL was gone away".
         # Here we check whether our current db connection is accessible or not (if not, refresh it)
@@ -46,13 +50,16 @@ def refresh_db_connection(f):
     return tmp
 
 
-def send_response(reply_queue, query):
+def send_response(nickname, query):
     '''
     This function put query into the specified queue
-    :param reply_queue: (str) queue - where to place query
+
+    :param nickname: (str) - needs to put query into correct queue for particular nickname (player)
     :param query: (str) - compressed query
     '''
-    print "response sent: %s" % query
+    print "<< Response sent: %s" % query
+
+    reply_queue = "resp_" + nickname
 
     channel.basic_publish(exchange='',
                           routing_key=reply_queue,
@@ -62,9 +69,21 @@ def send_response(reply_queue, query):
                           ))
 
 
+@refresh_db_connection
+def attach_handler_to_existing_players():
+    '''
+        Attach handler for existing users, to fetch new requests in the queue
+    '''
+    for player in Player.select():
+        queue_name = 'req_' + player.nickname
+
+        channel.queue_declare(queue=queue_name, durable=True)
+        channel.basic_consume(on_user_request, queue=queue_name)
+
+
 # Handlers for queue ===================================================================================
 def on_register_nickname(ch, method, props, body):
-    print(" [x] Received reg nick %r" % body)
+    print(">> Received command to register nickname: %s" % body)
 
     command, nickname = parse_query(body)
 
@@ -75,15 +94,21 @@ def on_register_nickname(ch, method, props, body):
 
     ch.basic_publish(exchange='',
                      routing_key=props.reply_to,
-                     body=response,
-                     properties=pika.BasicProperties(correlation_id=props.correlation_id)
-                     )
+                     body=response)
 
+    # Remove msg after reading
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 def on_user_request(ch, method, props, body):
-    print(" [x] Received %r" % body)
+    '''
+    It's main handler to process players requests
+
+    :param ch: channel
+    :param method: -
+    :param props: -
+    :param body: message
+    '''
 
     query = None
 
@@ -92,20 +117,26 @@ def on_user_request(ch, method, props, body):
 
     command, data = parse_query(body)
 
+    print ">> Received command: %s, data: %s" % (command_to_str(command), data)
+
+    # +
     if command == COMMAND.CREATE_NEW_GAME:
-
         resp_code, map_id = create_new_map(owner_id=player_id, name=data, rows='5', columns='5')
-
         query = pack_resp(command, resp_code, data=map_id)
 
     elif command == COMMAND.JOIN_EXISTING_GAME:
-        pass
+        resp_code = join_game(map_id=data, player_id=player_id, player_nickname=nickname)
+        query = pack_resp(command, resp_code)
 
     elif command == COMMAND.PLACE_SHIP:
         pass
 
+    # +
     elif command == COMMAND.MAKE_HIT:
-        pass
+        map_id, row, column = parse_data(data)
+
+        resp_code, hit = register_hit(map_id, player_id, row, column)
+        query = pack_resp(command, resp_code, hit)
 
     elif command == COMMAND.DISCONNECT_FROM_GAME:
         pass
@@ -124,9 +155,7 @@ def on_user_request(ch, method, props, body):
 
     # Put response into the queue
     if query:
-        reply_queue = "resp_" + nickname
-
-        send_response(reply_queue=reply_queue, query=query)
+        send_response(nickname=nickname, query=query)
 
     # Remove read msg rom queue
     channel.basic_ack(delivery_tag=method.delivery_tag)
@@ -162,6 +191,11 @@ def on_user_request(ch, method, props, body):
 @refresh_db_connection
 def player_id_by_nickname(nickname):
     return Player.get(Player.nickname == nickname).player_id
+
+
+@refresh_db_connection
+def map_exists(map_id):
+    return Map.select().where(Map.map_id == map_id).count() > 0
 
 
 @refresh_db_connection
@@ -207,17 +241,26 @@ def register_hit(map_id, player_id, row, column):
     # map_id, row, column = [int(v) for v in [map_id, row, column]]
     resp_code, hit = RESP.OK, ""
 
-    if Player_hits.select().where(Player_hits.map == map_id,
-                                  Player_hits.player == player_id,
-                                  Player_hits.row == row,
-                                  Player_hits.column == column).count() == 0:
+    # Map doesn't exist
+    if not map_exists(map_id):
+        resp_code = RESP.MAP_DOES_NOT_EXIST
+
+    # Player already made shot in this region
+    elif Player_hits.select().where(Player_hits.map == map_id,
+                                    Player_hits.player == player_id,
+                                    Player_hits.row == row,
+                                    Player_hits.column == column).count() > 0:
+        resp_code = RESP.SHOT_WAS_ALREADY_MADE_HERE
+
+    # Register new shot
+    else:
+        hit = "1"
+
+        Player_hits.create(map=map_id, player=player_id, row=row, column=column, hit=hit)
 
         # TODO: add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
-
-        hit = 1
-        Player_hits.create(map=map_id, player=player_id, row=row, column=column, hit=hit)
-    else:
-        resp_code = RESP.SHOT_WAS_ALREADY_MADE_HERE
+        # TODO: if ship sank, send notification to all players in this game
+        # TODO: notify next player if hit = 0
 
     return resp_code, hit
 
@@ -226,13 +269,14 @@ def register_hit(map_id, player_id, row, column):
 def create_new_map(owner_id, name, rows, columns):
     '''
     Create a new map with size of (rows x columns)
+
     :param owner_id: (int)
     :param name: (str) = map name
     :param rows: (str)
     :param columns: (str)
     :return: (enum) = response code, (str) map_id
     '''
-    resp_code, map_id = "", ""
+    resp_code, map_id = RESP.OK, ""
 
     # Check that map with the same name doesn't exist in DB
     if Map.select().where(Map.name == name).count() == 0:
@@ -240,11 +284,49 @@ def create_new_map(owner_id, name, rows, columns):
         Map.create(owner=owner_id, name=name, rows=rows, columns=columns)
         map_id = Map.select().order_by(Map.map_id.desc()).get().map_id
 
-        resp_code = RESP.OK
     else:
         resp_code = RESP.MAP_NAME_ALREADY_EXISTS
 
     return resp_code, str(map_id)
+
+
+def join_game(map_id, player_id, player_nickname):
+    '''
+    Player wants to join existing game
+
+    :param map_id: (str) - map that user wants to join
+    :param player_id: (str)
+    :param player_nickname: (str)
+    :return: resp_code (enum)
+    '''
+    resp_code = RESP.OK
+
+    # Map doesn't exist
+    if not map_exists(map_id):
+        resp_code = RESP.MAP_DOES_NOT_EXIST
+
+    # Game session already started on requested map
+    elif Map.select().where(Map.map_id == map_id, Map.game_started == 1) > 0:
+        resp_code = RESP.GAME_ALREADY_STARTED
+
+    # Player already joined this map
+    elif Player_to_map.select().where(Player_to_map.map == map_id, Player_to_map.player == player_id) > 0:
+        resp_code = RESP.ALREADY_JOINED_TO_MAP
+
+    # Add player to the requested map
+    else:
+        Player_to_map.create(map_id=map_id, player=player_id)
+
+        map_creator = Map.select().where(map_id == map_id)
+
+        # Check that current player and creator of the map are different players
+        if map_creator.owner != player_id:
+            # Notify admin about joining a new player
+            query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME, RESP.OK, player_nickname)
+            send_response(map_creator.owner.nickname, query)
+
+    return resp_code
+
 
 
 # nickname = "sdasds"
@@ -264,24 +346,6 @@ def create_new_map(owner_id, name, rows, columns):
 # Set=up RabbitMQ connection
 
 
-
-@refresh_db_connection
-def attach_handler_for_existing_players():
-    ''' Attach handler for existing users, to fetch new requests in the queue '''
-    print 1
-    for player in Player.select():
-        queue_name = 'req_' + player.nickname
-        # print "queue_name: %s" % queue_name
-
-        channel.queue_declare(queue=queue_name, durable=True)
-        channel.basic_consume(on_user_request, queue=queue_name)
-
-
-
-
-# This tells RabbitMQ not to give more than one message to a worker at a time.
-# channel.basic_qos(prefetch_count=1)
-
 connection = pika.BlockingConnection(pika.ConnectionParameters(virtual_host=MQ_HOST))
 channel = connection.channel()
 
@@ -290,7 +354,7 @@ channel.queue_declare(queue='register_nickname', durable=True)
 
 # Attach triggers to queues
 channel.basic_consume(on_register_nickname, queue='register_nickname')
-attach_handler_for_existing_players()
+attach_handler_to_existing_players()
 
 print(' [*] Waiting for messages. To exit press CTRL+C')
 channel.start_consuming()

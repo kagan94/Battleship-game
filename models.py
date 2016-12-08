@@ -63,10 +63,11 @@ class Map(BaseModel):
     name = CharField()
     rows = IntegerField()
     columns = IntegerField()
+    game_started = IntegerField()
 
     def __str__(self):
-        return "Map_id:%s, owner:%s, map_name:%s, rows:%s, columns:%s"\
-               % (self.map_id, self.owner.nickname, self.name, self.rows, self.columns)
+        return "Map_id:%s, owner:%s, map_name:%s, rows:%s, columns:%s, game_started: %s"\
+               % (self.map_id, self.owner.nickname, self.name, self.rows, self.columns, self.game_started)
 
 
 class Player_to_map(BaseModel):

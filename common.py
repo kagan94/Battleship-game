@@ -36,13 +36,15 @@ COMMAND = enum(
     INVITE_PLAYERS='10',
 
     # Notifications from the server
-    # NOTIFICATION=enum(
-    #     UPDATE_FILE='9',
-    #     FILE_CREATION='10',
-    #     FILE_DELETION='11',
-    #     CHANGED_ACCESS_TO_FILE='12'
-    # )
+    NOTIFICATION=enum(
+        PLAYER_JOINED_TO_GAME='21',
+        YOUR_SHIP_WAS_DAMAGED='22',
+        YOUR_SHIP_SANK='23',
+        SOMEONES_SHIP_SANK='24',
+        YOUR_TURN_TO_MOVE='25'
+    )
 )
+
 
 # Responses
 RESP = enum(
@@ -50,7 +52,10 @@ RESP = enum(
     FAIL='1',
     NICKNAME_ALREADY_EXISTS='2',
     SHOT_WAS_ALREADY_MADE_HERE='3',
-    MAP_NAME_ALREADY_EXISTS='4'
+    MAP_NAME_ALREADY_EXISTS='4',
+    MAP_DOES_NOT_EXIST='5',
+    GAME_ALREADY_STARTED='6',
+    ALREADY_JOINED_TO_MAP='7'
 )
 
 
@@ -68,12 +73,66 @@ def error_code_to_string(err_code):
         err_text = "No errors"
     elif err_code == RESP.FAIL:
         err_text = "Bad result"
-    elif err_code == RESP.SHOT_WAS_ALREADY_MADE_HERE:
-        err_text = "Shot was already made here"
     elif err_code == RESP.NICKNAME_ALREADY_EXISTS:
         err_text = "Requested nickname already exists"
-
+    elif err_code == RESP.SHOT_WAS_ALREADY_MADE_HERE:
+        err_text = "Shot was already made here"
+    elif err_code == RESP.MAP_NAME_ALREADY_EXISTS:
+        err_text = "Given map name already exists"
+    elif err_code == RESP.MAP_DOES_NOT_EXIST:
+        err_text = "Given map doesn't exist"
+    elif err_code == RESP.GAME_ALREADY_STARTED:
+        err_text = "Game already started"
+    elif err_code == RESP.ALREADY_JOINED_TO_MAP:
+        err_text = "You already joined to requested map"
     return err_text
+
+
+def command_to_str(command):
+    '''
+    Convert command into the string
+
+    :param command: (str) - command code from enum COMMAND
+    :return text: (str) - explanation of the command
+    '''
+    global COMMAND
+
+    text = ""
+
+    if command == COMMAND.REGISTER_NICKNAME:
+        text = "Register nickname"
+    elif command == COMMAND.CREATE_NEW_GAME:
+        text = "Create new game"
+    elif command == COMMAND.JOIN_EXISTING_GAME:
+        text = "Join existing game"
+    elif command == COMMAND.PLACE_SHIP:
+        text = "Place ship"
+    elif command == COMMAND.MAKE_HIT:
+        text = "Make shot"
+    elif command == COMMAND.DISCONNECT_FROM_GAME:
+        text = "Disconnect from the game"
+    elif command == COMMAND.QUIT_FROM_GAME:
+        text = "Quit from the game"
+    elif command == COMMAND.START_GAME:
+        text = "Start game"
+    elif command == COMMAND.RESTART_GAME:
+        text = "Restart the game"
+    elif command == COMMAND.INVITE_PLAYERS:
+        text = "Invite players"
+
+    # Notifications
+    elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
+        text = "Notif. Another player joined"
+    elif command == COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED:
+        text = "Notif. Another player damaged my ship"
+    elif command == COMMAND.NOTIFICATION.YOUR_SHIP_SANK:
+        text = "Notif. My ship sank"
+    elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
+        text = "Notif. Another player damaged another player's ship"
+    elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
+        text = "Notif. My turn to move"
+
+    return text
 
 
 def pack_query(command, data=""):

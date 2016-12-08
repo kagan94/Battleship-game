@@ -104,24 +104,24 @@ class Client(object):
         print "Nickname exists"
 
         if self.nickname:
-            game_name = "test game name"
-            query = pack_query(command=COMMAND.CREATE_NEW_GAME, data=game_name)
-
-            print "Put query to register a new game"
-
-            print 'req_' + self.nickname
 
             # Declare queue to put requests
             request_queue = 'req_' + self.nickname
             self.channel.queue_declare(queue=request_queue, durable=True)
 
-            self.channel.basic_publish(exchange='',
-                                       routing_key=request_queue,
-                                       body=query,
-                                       properties=pika.BasicProperties(
-                                           reply_to='resp_' + self.nickname,
-                                           delivery_mode=2
-                                       ))
+            self.create_new_game("abc game")
+
+            self.register_hit(map_id='71', target_row='2', target_column='2')
+
+            self.join_game(map_id='71')
+
+            # self.channel.basic_publish(exchange='',
+            #                            routing_key=request_queue,
+            #                            body=query,
+            #                            properties=pika.BasicProperties(
+            #                                reply_to='resp_' + self.nickname,
+            #                                delivery_mode=2
+            #                            ))
 
             notifications_thread = Thread(name='NotificationsThread', target=self.notifications_loop)
             notifications_thread.start()
@@ -142,16 +142,20 @@ class Client(object):
     def close_connection(self):
         self.connection.close()
 
-    # Generate and save corr_id into local queue corr_ids with corresponding command
-    # def generate_corr_id(self, command):
-    #     '''
-    #     :param command: (enum)
-    #     :return: (str) return generated correlation_id
-    #     '''
-    #     corr_id = str(uuid.uuid4())
-    #     self.corr_ids[corr_id] = command
-    #
-    #     return corr_id
+    def send_request(self, query):
+        '''
+            Put request into the client queue for server
+            Later server will fetch this query
+
+            :param query: (str) packed command, data in one string
+        '''
+
+        print "<< Query (%s) put into request queue" % query
+
+        request_queue = 'req_' + self.nickname
+        self.channel.basic_publish(exchange='',
+                                   routing_key=request_queue,
+                                   body=query)
 
     def get_nickname(self):
         '''
@@ -171,7 +175,8 @@ class Client(object):
 
     def register_nickname(self, nickname):
         '''
-        Register the nickname
+        Register the nickname provided by player
+
         :param nickname: (str)
         '''
         nickname = "my_nicknam1234" + str(uuid.uuid4())
@@ -179,59 +184,89 @@ class Client(object):
         command = COMMAND.REGISTER_NICKNAME
         query = pack_query(command, data=nickname)
 
-        # corr_id = self.generate_corr_id(command)
         self.channel.basic_publish(exchange='',
                                    routing_key='register_nickname',
                                    body=query,
                                    properties=pika.BasicProperties(
                                        reply_to=self.temp_queue_name,
-                                       # correlation_id=corr_id,
                                        delivery_mode=2
                                    ))
 
+        # resp_code, hit = register_hit(map_id, player_id, row, column)
+
         # TODO: Block the window
 
-    def save_nickname_local(self, nickname):
+    # Main methods for GUI ============================================================
+    def create_new_game(self, game_name):
         '''
-        Save nickname in local config
+        Register a new game on the server
 
-        :param nickname: (str)
+        :param game_name: (str)
         '''
 
-        conf = CP.RawConfigParser()
-        conf.add_section("USER_INFO")
-        conf.set('USER_INFO', 'nickname', nickname)
+        # Put query into MQ to register a new game
+        query = pack_query(command=COMMAND.CREATE_NEW_GAME, data=game_name)
+        self.send_request(query)
 
-        with open(config_file, 'w') as cf:
-            conf.write(cf)
+    def join_game(self, map_id):
+        '''
+        Register a new game on the server
 
-        # Delete temporary queue if exists
-        if self.temp_queue:
-            self.channel.queue_delete(queue=self.temp_queue_name)
+        :param map_id: (str) - map that player wants to connect
+        '''
 
+        # Put query into MQ to join existing game
+        query = pack_query(COMMAND.JOIN_EXISTING_GAME, map_id)
+        self.send_request(query)
+
+    def register_hit(self, map_id, target_row, target_column):
+        '''
+        Register a new hit on the map
+
+        :param map_id: (str)
+        :param target_row: (str)
+        :param target_column: (str)
+        '''
+
+        data = pack_data([map_id, target_row, target_column])
+        query = pack_query(COMMAND.MAKE_HIT, data)
+
+        # Put query to register a new hit
+        self.send_request(query)
+
+    # Handlers ========================================================================
     def on_resp_reg_me(self, channel, method, props, body):
-
+        ''' Handler to receive response on request reg_me '''
         command, resp_code, data = parse_response(body)
 
-        if command == COMMAND.REGISTER_NICKNAME:
+        if resp_code == RESP.OK:
+            print "Nickname was registered successfully"
 
-            if resp_code == RESP.OK:
-                print "Nickname was registered successfully"
-                self.save_nickname_local(nickname=data)
-                self.nickname = data
+            self.nickname = data
 
-                # TODO: Unblock GUI window
+            # Save nickname in local config
+            conf = CP.RawConfigParser()
+            conf.add_section("USER_INFO")
+            conf.set('USER_INFO', 'nickname', self.nickname)
 
+            with open(config_file, 'w') as cf:
+                conf.write(cf)
 
-                # Delete temporary queue if exists
-                if self.temp_queue:
-                    self.channel.queue_delete(queue=self.temp_queue_name)
+            # Delete temporary queue if exists
+            if self.temp_queue:
+                self.channel.queue_delete(queue=self.temp_queue_name)
 
-                # Close reg_me connection
-                self.reg_me_connection.close()
+            # TODO: Unblock GUI window
 
-            else:
-                print "Register nickname error: %s" % error_code_to_string(resp_code)
+            # Delete temporary queue if exists
+            if self.temp_queue:
+                self.channel.queue_delete(queue=self.temp_queue_name)
+
+            # Close reg_me connection
+            self.reg_me_connection.close()
+
+        else:
+            print "Register nickname error: %s" % error_code_to_string(resp_code)
 
     def on_response(self, channel, method, props, body):
         # if props.correlation_id in self.corr_ids.keys():
@@ -240,15 +275,17 @@ class Client(object):
         # command = self.corr_ids[props.correlation_id]
         # del self.corr_ids[props.correlation_id]
 
-        print method.routing_key, body
-
         command, resp_code, data = parse_response(body)
+
+        print ">> Received resp(%s) on command: %s" % (error_code_to_string(resp_code), command_to_str(command))
 
         if command == COMMAND.CREATE_NEW_GAME:
             pass
+            # TODO: Update GUI, open new field
 
         elif command == COMMAND.JOIN_EXISTING_GAME:
             pass
+            # TODO: Update GUI, open the field with existing game
 
         elif command == COMMAND.PLACE_SHIP:
             pass
@@ -269,6 +306,30 @@ class Client(object):
             pass
 
         elif command == COMMAND.INVITE_PLAYERS:
+            pass
+
+        # NOTIFICATIONS FROM SERVER
+        # 1) If I'm owner of the map and another player joined
+        # 2) Another player damaged my ship
+        # 3) My ship sank
+        # 4) My turn to move
+        # 5) Another player damaged another player's ship
+
+        elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
+            joined_player = data
+
+            # TODO: GUI update status bar about joined player
+
+        elif command == COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED:
+            pass
+
+        elif command == COMMAND.NOTIFICATION.YOUR_SHIP_SANK:
+            pass
+
+        elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
+            pass
+
+        elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
             pass
 
         # Remove read msg rom queue
