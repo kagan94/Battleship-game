@@ -14,6 +14,8 @@
 
 ## TODO Server:
 * add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in register_hit function)
+* if ship sank, send notification to all players in this game
+* notify next player if hit = 0
 
 ## TODO Client:
 
