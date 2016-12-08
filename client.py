@@ -75,18 +75,18 @@ class Client(object):
         # Open connection with RabbitMQ server
         self.open_connection()
 
-        # Create temp queue for collecting only for register nickname for this user
-        self.temp_queue = self.channel.queue_declare()
-        self.temp_queue_name = self.temp_queue.method.queue
-        # self.temp_queue = self.channel.queue_declare(queue="temp_queue")
-
         nickname = self.get_nickname()
 
         if not nickname:
+            # Create temp queue for collecting only for register nickname for this user
+            self.temp_queue = self.channel.queue_declare()
+            self.temp_queue_name = self.temp_queue.method.queue
+            # self.temp_queue = self.channel.queue_declare(queue="temp_queue")
+
             reg_me_thread = Thread(name='RegisterMeThread', target=self.reg_me_loop)
             reg_me_thread.start()
 
-            # print 11
+            print "Try to register nickname"
 
             # TODO: Create GUI window to enter nickname
             self.register_nickname("dsa")
@@ -101,12 +101,22 @@ class Client(object):
         while self.nickname is None:
             pass
 
+        print "Nickname exists"
+
         if self.nickname:
             game_name = "test game name"
             query = pack_query(command=COMMAND.CREATE_NEW_GAME, data=game_name)
 
+            print "Put query to register a new game"
+
+            print 'req_' + self.nickname
+
+            # Declare queue to put requests
+            request_queue = 'req_' + self.nickname
+            self.channel.queue_declare(queue=request_queue, durable=True)
+
             self.channel.basic_publish(exchange='',
-                                       routing_key='req_' + self.nickname,
+                                       routing_key=request_queue,
                                        body=query,
                                        properties=pika.BasicProperties(
                                            reply_to='resp_' + self.nickname,
@@ -162,7 +172,6 @@ class Client(object):
     def register_nickname(self, nickname):
         '''
         Register the nickname
-
         :param nickname: (str)
         '''
         nickname = "my_nicknam1234" + str(uuid.uuid4())
@@ -280,6 +289,7 @@ class Client(object):
 
         channel.start_consuming()
 
+        # Close MQ connection if still opened
         if not self.reg_me_connection.is_closed:
             self.reg_me_connection.close()
 
@@ -288,10 +298,18 @@ class Client(object):
         channel = connection.channel()
 
         # Bind trigger to response queue
-        channel.basic_consume(self.on_response, queue="resp_" + self.nickname)
+        resp_queue = "resp_" + self.nickname
+
+        channel.queue_declare(queue=resp_queue, durable=True)
+        channel.basic_consume(self.on_response, queue=resp_queue)
 
         channel.start_consuming()
-        connection.close()
+
+        # Close MQ connection if still opened
+        if not connection.is_closed:
+            connection.close()
+
+
 
 
 client = Client()

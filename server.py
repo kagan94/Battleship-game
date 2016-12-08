@@ -16,6 +16,25 @@ from models import *
 from common import *
 
 
+
+# TODO: delete in final version
+# import requests
+#
+# def rest_queue_list(user='guest', password='guest', host='localhost', port=15672, virtual_host="localhost"):
+#     url = 'http://%s:%s/api/queues/%s' % (host, port, virtual_host or '')
+#     response = requests.get(url, auth=(user, password))
+#     queues = [q['name'] for q in response.json()]
+#     return queues
+
+# connection = pika.BlockingConnection(pika.ConnectionParameters(virtual_host=MQ_HOST))
+# channel = connection.channel()
+#
+# for queue_name in rest_queue_list():
+#     channel.queue_delete(queue=queue_name)
+#
+# connection.close()
+
+
 def refresh_db_connection(f):
     ''' It's a decorator to refresh DB connection '''
     def tmp(*args, **kwargs):
@@ -33,18 +52,19 @@ def send_response(reply_queue, query):
     :param reply_queue: (str) queue - where to place query
     :param query: (str) - compressed query
     '''
+    print "response sent: %s" % query
+
     channel.basic_publish(exchange='',
-                          routing_key='register_nickname',
+                          routing_key=reply_queue,
                           body=query,
                           properties=pika.BasicProperties(
-                              reply_to=reply_queue,
                               delivery_mode=2
                           ))
 
 
 # Handlers for queue ===================================================================================
 def on_register_nickname(ch, method, props, body):
-    print(" [x] Received %r" % body)
+    print(" [x] Received reg nick %r" % body)
 
     command, nickname = parse_query(body)
 
@@ -76,11 +96,7 @@ def on_user_request(ch, method, props, body):
 
         resp_code, map_id = create_new_map(owner_id=player_id, name=data, rows='5', columns='5')
 
-        data = pack_data([resp_code, map_id])
-        query = pack_query(command=command, data=data)
-
-    if command == COMMAND.CREATE_NEW_GAME:
-        pass
+        query = pack_resp(command, resp_code, data=map_id)
 
     elif command == COMMAND.JOIN_EXISTING_GAME:
         pass
@@ -162,6 +178,7 @@ def register_nickname(nickname=""):
     # If nickname doesn't exist in DB, then create it
     if not nickname_exists:
         Player.create(nickname=nickname)
+        print "created nick" + nickname
 
         resp_code = RESP.OK
 
@@ -172,6 +189,7 @@ def register_nickname(nickname=""):
         channel.queue_declare(queue=req_nickname_queue, durable=True)
         channel.queue_declare(queue=resp_nickname_queue, durable=True)
 
+        # print "req_nickname_queue: %s" % req_nickname_queue
         channel.basic_consume(on_user_request, queue=req_nickname_queue)
 
     return resp_code
@@ -250,8 +268,10 @@ def create_new_map(owner_id, name, rows, columns):
 @refresh_db_connection
 def attach_handler_for_existing_players():
     ''' Attach handler for existing users, to fetch new requests in the queue '''
+    print 1
     for player in Player.select():
         queue_name = 'req_' + player.nickname
+        # print "queue_name: %s" % queue_name
 
         channel.queue_declare(queue=queue_name, durable=True)
         channel.basic_consume(on_user_request, queue=queue_name)
