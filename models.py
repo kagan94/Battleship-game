@@ -1,15 +1,50 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from playhouse.pool import PooledMySQLDatabase
 from peewee import *
 import datetime
+from bottle import hook
+from pymysql import OperationalError
 
 # Establish connection to our DB
-db = MySQLDatabase('battleship', user='root', password='')
-db.connect()
+
+# db = MySQLDatabase('battleship', user='root', password='')
+# db.connect()
+
+# 'my_app',
+    # max_connections=32,
+    # stale_timeout=300,  # 5 minutes.
+    # user='postgres'
+
+
+db = PooledMySQLDatabase('battleship',**{
+            "user": "root", "passwd": "",
+            "max_connections":20, "stale_timeout":None,
+            "threadlocals":True
+        })
+
+
+# db.connect()
+
+
+# class MyRetryDB(OperationalError, MySQLDatabase):
+
+
+
+
+# @hook('before_request')
+# def _connect_db():
+#     db.connect()
+#
+# @hook('after_request')
+# def _close_db():
+#     if not db.is_closed():
+#         db.close()
 
 
 class BaseModel(Model):
+
     class Meta:
         database = db
 

@@ -1,4 +1,14 @@
 
+# Extend PYTHONPATH for working directory----------------------------------
+import os
+from sys import path, argv
+a_path = os.path.sep.join(os.path.abspath(argv[0]).split(os.path.sep)[:-1])
+path.append(a_path)
+
+
+# Constants -------------------------------------------------------------------
+MQ_HOST = "localhost"
+MQ_PORT = 15672
 SEP = "|"  # separate command and data in request
 SEP_DATA = ":"
 # TIMEOUT = 5  # in seconds
@@ -57,13 +67,21 @@ def error_code_to_string(err_code):
     if err_code == RESP.OK:
         err_text = "No errors"
     elif err_code == RESP.FAIL:
-        err_text = "Bad result."
-    elif err_code == RESP.PERMISSION_ERROR:
-        err_text = "Permissions error."
+        err_text = "Bad result"
+    elif err_code == RESP.SHOT_WAS_ALREADY_MADE_HERE:
+        err_text = "Shot was already made here"
     elif err_code == RESP.NICKNAME_ALREADY_EXISTS:
-        err_text = "Requested nickname already exists."
+        err_text = "Requested nickname already exists"
 
     return err_text
+
+
+def pack_query(command, data=""):
+    '''
+    :param data: (list) to pack
+    :return: packed elements from the list separated by separator
+    '''
+    return SEP.join([command, data])
 
 
 def pack_resp(command, resp_code, data=""):
