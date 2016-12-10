@@ -64,6 +64,7 @@ class Player_to_map(BaseModel):
 
 
 class Ship_to_map(BaseModel):
+    location_id = IntegerField(primary_key=True)
     map = ForeignKeyField(Map)
     player = ForeignKeyField(Player)
     row_start = IntegerField()
@@ -73,9 +74,9 @@ class Ship_to_map(BaseModel):
     ship_type = IntegerField()
 
     def __str__(self):
-        return "Map_id:%s, player:%s, row_start:%s, row_end:%s, column_start:%s, " \
+        return "Location_id:%s, Map_id:%s, player:%s, row_start:%s, row_end:%s, column_start:%s, " \
                "column_end:%s, ship_type:%s"\
-               %(self.map_id, self.player.nickname, self.row_start, self.row_end,
+               %(self.location_id, self.map_id, self.player.nickname, self.row_start, self.row_end,
                  self.column_start, self.column_end, self.ship_type)
 
     class Meta:

@@ -1,6 +1,7 @@
 import pygame
 from Tkinter import *
 
+
 def main():
     root = Tk()
     root.title("Size Selector")
@@ -13,7 +14,7 @@ def main():
 
     var = StringVar(root)
     global size
-    size=20
+    size = 20
 
     # Use dictionary to map names to ages.
     choices = {
@@ -27,15 +28,17 @@ def main():
 
     option.grid(row=1, column=1)
 
-
-
     # change_age is called on var change.
     def change_size(*args):
         global size
-        choice=var.get()
-        if choice=="S": size = 20
-        if choice == "M": size = 40
-        if choice == "L": size = 50
+        choice = var.get()
+
+        if choice == "S":
+            size = 20
+        elif choice == "M":
+            size = 40
+        elif choice == "L":
+            size = 50
 
     # trace the change of var
     var.trace('w', change_size)
@@ -95,12 +98,15 @@ def main2(size=20):
         for event in pygame.event.get():  # User did something
             if event.type == pygame.QUIT:  # If user clicked close
                 done = True  # Flag that we are done so we exit this loop
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # User clicks the mouse. Get the position
                 pos = pygame.mouse.get_pos()
+
                 # Change the x/y screen coordinates to grid coordinates
                 column = pos[0] // (WIDTH + MARGIN)
                 row = pos[1] // (HEIGHT + MARGIN)
+
                 # Set that location to one
                 grid[row][column] = 1
                 print("Click ", pos, "Grid coordinates: ", row, column)
@@ -114,6 +120,7 @@ def main2(size=20):
                 color = WHITE
                 if grid[row][column] == 1:
                     color = GREEN
+
                 pygame.draw.rect(screen,
                                  color,
                                  [(MARGIN + WIDTH) * column + MARGIN,
@@ -131,4 +138,6 @@ def main2(size=20):
     # on exit.
     pygame.quit()
 
-if __name__ == '__main__': main()
+
+if __name__ == '__main__':
+    main()

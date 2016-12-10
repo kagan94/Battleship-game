@@ -124,11 +124,11 @@ class Main_Server(object):
         reply_queue = "resp_" + nickname
 
         self.channel.basic_publish(exchange='',
-                              routing_key=reply_queue,
-                              body=query,
-                              properties=pika.BasicProperties(
-                                  delivery_mode=2
-                              ))
+                                   routing_key=reply_queue,
+                                   body=query,
+                                   properties=pika.BasicProperties(
+                                       delivery_mode=2
+                                   ))
 
     @refresh_db_connection
     def attach_handler_to_existing_players(self):
@@ -364,7 +364,6 @@ class Main_Server(object):
                 self.send_response(map_creator.owner.nickname, query)
 
         return resp_code
-
 
 
 # nickname = "sdasds"
