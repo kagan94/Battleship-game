@@ -184,19 +184,22 @@ class Main_Server(object):
                                                     rows='5', columns='5')
             query = pack_resp(command, resp_code, self.server_id, data=map_id)
 
+        # +
         elif command == COMMAND.JOIN_EXISTING_GAME:
             resp_code = self.join_game(map_id=data, player_id=player_id, player_nickname=nickname)
             query = pack_resp(command, resp_code, self.server_id)
 
-        elif command == COMMAND.PLACE_SHIP:
+        elif command == COMMAND.PLACE_SHIPS:
             pass
 
         # +
         elif command == COMMAND.MAKE_HIT:
             map_id, row, column = parse_data(data)
 
-            resp_code, hit = self.register_hit(map_id, player_id, row, column)
-            query = pack_resp(command, resp_code, self.server_id, data=hit)
+            resp_code, hit, is_game_end = self.make_hit(map_id, player_id, row, column)
+            data = pack_data([hit, is_game_end])
+
+            query = pack_resp(command, resp_code, self.server_id, data)
 
         elif command == COMMAND.DISCONNECT_FROM_GAME:
             pass
@@ -210,7 +213,7 @@ class Main_Server(object):
         elif command == COMMAND.RESTART_GAME:
             pass
 
-        elif command == COMMAND.INVITE_PLAYERS:
+        elif command == COMMAND.KICK_PLAYER:
             pass
 
         # Put response into the queue
@@ -264,7 +267,7 @@ class Main_Server(object):
         return resp_code
 
     @refresh_db_connection
-    def register_hit(self, map_id, player_id, row, column):
+    def make_hit(self, map_id, player_id, row, column):
         '''
         :param map_id: (str)
         :param player_id: (int)
@@ -273,7 +276,8 @@ class Main_Server(object):
         :return: (enum) = response code, (str) = result of shot (0 = missed, 1 = hit)
         '''
         # map_id, row, column = [int(v) for v in [map_id, row, column]]
-        resp_code, hit = RESP.OK, ""
+        # is_game_end can be "0" or "1"
+        resp_code, hit, is_game_end = RESP.OK, "", "0"
 
         # Map doesn't exist
         if not self.map_exists(map_id):
@@ -293,10 +297,16 @@ class Main_Server(object):
             Player_hits.create(map=map_id, player=player_id, row=row, column=column, hit=hit)
 
             # TODO: add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
-            # TODO: if ship sank, send notification to all players in this game
+
+            # TODO: if shot was successful, check is the game ended and change var "is_game_end"
+            is_game_end = 1  # ?????? change later
+
+            # TODO: Check whether ship is completely sank, then send argument "completely_sank" to player who made shot
+
+            # TODO: if ship sank, send notification to damaged player
             # TODO: notify next player if hit = 0
 
-        return resp_code, hit
+        return resp_code, hit, is_game_end
 
     @refresh_db_connection
     def create_new_map(self, owner_id, name, rows, columns):
@@ -323,7 +333,7 @@ class Main_Server(object):
 
         return resp_code, str(map_id)
 
-
+    @refresh_db_connection
     def join_game(self, map_id, player_id, player_nickname):
         '''
         Player wants to join existing game
