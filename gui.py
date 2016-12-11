@@ -1,177 +1,180 @@
 import pygame
 from Tkinter import *
+from ScrolledText import *
 
-def nickname():
-    global root
-    root = Tk()
-    root.title("Enter a nickname")
+class GUI(object):
+    def nickname(self):
+        self.root = Tk()
+        self.root.title("Enter a nickname")
 
-    frame = Frame(root)
-    frame.grid(column=0, row=0, sticky=(N, W, E, S))
-    frame.columnconfigure(0, weight=1)
-    frame.rowconfigure(0, weight=1)
-    frame.pack(pady=10, padx=10)
+        self.frame = Frame(self.root)
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(0, weight=1)
+        self.frame.pack(pady=10, padx=10)
 
-    global size
-    size=20
+        self.size=20
+        self.name = Label(self.root, text="Enter a nickname")
+        self.name.pack()
+        self.e = Entry(self.root)
+        self.e.pack()
 
-    # Use dictionary to map names to ages.
-    e = Entry(root)
-    e.pack()
+        self.b = Button(self.root, text="Choose", command = lambda: self.servlist())
+        self.b.pack()
+        self.root.mainloop()
 
-    b = Button(root, text="Choose", command= lambda: servlist())
-    b.pack()
-    root.mainloop()
+    def servlist(self):
+        self.root.destroy()
+        self.root = Tk()
+        self.root.title("Choose a server")
 
-def servlist():
-    global root
-    root.destroy()
-    root = Tk()
-    root.title("Choose a server")
+        self.frame = Frame(self.root)
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(0, weight=1)
+        self.frame.pack(pady=10, padx=10)
 
-    frame = Frame(root)
-    frame.grid(column=0, row=0, sticky=(N, W, E, S))
-    frame.columnconfigure(0, weight=1)
-    frame.rowconfigure(0, weight=1)
-    frame.pack(pady=10, padx=10)
+        self.size=20
 
-    global size
-    size=20
-
-    b = Button(root, text="Choose", command= lambda: gamelist())
-    b.pack()
-    root.mainloop()
-
-
-def gamelist():
-    global root
-    root.destroy()
-    root = Tk()
-    root.title("Size Selector")
-
-    gamelistframe = Frame(root)
-    gamelistframe.grid(column=0, row=0, sticky=(N, W, E, S))
-    gamelistframe.columnconfigure(0, weight=1)
-    gamelistframe.rowconfigure(0, weight=1)
-    gamelistframe.pack(pady=10, padx=10)
-
-    var = StringVar(root)
-    nickname = StringVar(root)
-    global size
-    size=20
-
-    # Use dictionary to map names to ages.
-    choices = {
-        'S',
-        'M',
-        'L',
-    }
-
-    option = OptionMenu(gamelistframe, var, *choices)
-    var.set('S')
-
-    option.grid(row=1, column=1)
+        self.server = Label(self.root, text="Choose a server")
+        self.server.pack()
+        self.list = ScrolledText(self.root, width=10, height=12)
+        self.list.pack()
+        self.b = Button(self.root, text="Choose", command= lambda: self.gamelist())
+        self.b.pack()
+        self.root.mainloop()
 
 
-    # change_age is called on var change.
-    def change_size(*args):
-        global size
-        choice=var.get()
-        if choice=="S": size = 20
-        if choice == "M": size = 40
-        if choice == "L": size = 50
+    def gamelist(self):
+        self.root.destroy()
+        self.root = Tk()
+        self.root.title("Size Selector")
 
-    # trace the change of var
-    var.trace('w', change_size)
+        self.gamelistframe = Frame(self.root)
+        self.gamelistframe.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.gamelistframe.columnconfigure(0, weight=1)
+        self.gamelistframe.rowconfigure(0, weight=1)
+        self.gamelistframe.pack(pady=10, padx=10)
 
-    b = Button(root, text="OK", command= lambda: main(size))
-    b.pack()
-    root.mainloop()
+        self.var = StringVar(self.root)
+        self.nickname = StringVar(self.root)
 
-def main(size=20):
+        self.field = Label(self.root, text="Select a size of the field")
+        self.field.pack()
 
-    # Define some colors
-    BLACK = (0, 0, 0)
-    WHITE = (255, 255, 255)
-    GREEN = (0, 255, 0)
-    RED = (255, 0, 0)
+        self.size=20
 
-    # This sets the WIDTH and HEIGHT of each grid location
-    WIDTH = 12
-    HEIGHT = 12
+        choices = {
+            'S',
+            'M',
+            'L',
+        }
 
-    # This sets the margin between each cell
-    MARGIN = 2
+        self.option = OptionMenu(self.gamelistframe, self.var, *choices)
+        self.var.set('S')
 
-    # Create a 2 dimensional array. A two dimensional
-    # array is simply a list of lists.
-    grid = []
-    for row in range(size):
-        # Add an empty array that will hold each cell
-        # in this row
-        grid.append([])
-        for column in range(size):
-            grid[row].append(0)  # Append a cell
+        self.option.grid(row=1, column=1)
 
-    # Set row 1, cell 5 to one. (Remember rows and
-    # column numbers start at zero.)
-    grid[1][5] = 1
+        def change_size(*args):
+            global size
+            self.choice=self.var.get()
+            if self.choice=="S": self.size = 20
+            if self.choice == "M": self.size = 40
+            if self.choice == "L": self.size = 50
 
-    # Initialize pygame
-    pygame.init()
+        # trace the change of var
+        self.var.trace('w', change_size)
 
-    # Set the HEIGHT and WIDTH of the screen
-    WINDOW_SIZE = [(WIDTH+MARGIN)*size+MARGIN, (WIDTH+MARGIN)*size+MARGIN]
-    screen = pygame.display.set_mode(WINDOW_SIZE)
+        self.b = Button(self.root, text="OK", command= lambda: self.main(self.size))
+        self.b.pack()
+        self.root.mainloop()
 
-    # Set title of screen
-    pygame.display.set_caption("Array Backed Grid")
+    def main(self, size=20):
 
-    # Loop until the user clicks the close button.
-    done = False
+        # Define some colors
+        BLACK = (0, 0, 0)
+        WHITE = (255, 255, 255)
+        GREEN = (0, 255, 0)
+        RED = (255, 0, 0)
 
-    # Used to manage how fast the screen updates
-    clock = pygame.time.Clock()
+        # This sets the WIDTH and HEIGHT of each grid location
+        WIDTH = 12
+        HEIGHT = 12
 
-    # -------- Main Program Loop -----------
-    while not done:
-        for event in pygame.event.get():  # User did something
-            if event.type == pygame.QUIT:  # If user clicked close
-                done = True  # Flag that we are done so we exit this loop
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                # User clicks the mouse. Get the position
-                pos = pygame.mouse.get_pos()
-                # Change the x/y screen coordinates to grid coordinates
-                column = pos[0] // (WIDTH + MARGIN)
-                row = pos[1] // (HEIGHT + MARGIN)
-                # Set that location to one
-                grid[row][column] = 1
-                print("Click ", pos, "Grid coordinates: ", row, column)
+        # This sets the margin between each cell
+        MARGIN = 2
 
-        # Set the screen background
-        screen.fill(BLACK)
+        # Create a 2 dimensional array. A two dimensional
+        # array is simply a list of lists.
+        self.grid = []
+        for self.row in range(self.size):
+            # Add an empty array that will hold each cell
+            # in this row
+            self.grid.append([])
+            for self.column in range(self.size):
+                self.grid[self.row].append(0)  # Append a cell
 
-        # Draw the grid
-        for row in range(size):
-            for column in range(size):
-                color = WHITE
-                if grid[row][column] == 1:
-                    color = GREEN
-                pygame.draw.rect(screen,
-                                 color,
-                                 [(MARGIN + WIDTH) * column + MARGIN,
-                                  (MARGIN + HEIGHT) * row + MARGIN,
-                                  WIDTH,
-                                  HEIGHT])
+        # Set row 1, cell 5 to one. (Remember rows and
+        # column numbers start at zero.)
+        self.grid[1][5] = 1
 
-        # Limit to 60 frames per second
-        clock.tick(60)
+        # Initialize pygame
+        pygame.init()
 
-        # Go ahead and update the screen with what we've drawn.
-        pygame.display.flip()
+        # Set the HEIGHT and WIDTH of the screen
+        self.WINDOW_SIZE = [(WIDTH+MARGIN)*size+MARGIN, (WIDTH+MARGIN)*size+MARGIN]
+        self.screen = pygame.display.set_mode(self.WINDOW_SIZE)
 
-    # Be IDLE friendly. If you forget this line, the program will 'hang'
-    # on exit.
-    pygame.quit()
+        # Set title of screen
+        pygame.display.set_caption("Battleship game")
 
-if __name__ == '__main__': nickname()
+        # Loop until the user clicks the close button.
+        done = False
+
+        # Used to manage how fast the screen updates
+        clock = pygame.time.Clock()
+
+        # -------- Main Program Loop -----------
+        while not done:
+            for event in pygame.event.get():  # User did something
+                if event.type == pygame.QUIT:  # If user clicked close
+                    done = True  # Flag that we are done so we exit this loop
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    # User clicks the mouse. Get the position
+                    pos = pygame.mouse.get_pos()
+                    # Change the x/y screen coordinates to grid coordinates
+                    self.column = pos[0] // (WIDTH + MARGIN)
+                    self.row = pos[1] // (HEIGHT + MARGIN)
+                    # Set that location to one
+                    self.grid[self.row][self.column] = 1
+                    print("Click ", pos, "Grid coordinates: ", self.row, self.column)
+
+            # Set the screen background
+            self.screen.fill(BLACK)
+
+            # Draw the grid
+            for self.row in range(self.size):
+                for self.column in range(self.size):
+                    self.color = WHITE
+                    if self.grid[self.row][self.column] == 1:
+                        self.color = GREEN
+                    pygame.draw.rect(self.screen,
+                                     self.color,
+                                     [(MARGIN + WIDTH) * self.column + MARGIN,
+                                     (MARGIN + HEIGHT) * self.row + MARGIN,
+                                     WIDTH,
+                                     HEIGHT])
+
+            # Limit to 60 frames per second
+            clock.tick(60)
+
+            # Go ahead and update the screen with what we've drawn.
+            pygame.display.flip()
+
+        # Be IDLE friendly. If you forget this line, the program will 'hang'
+        # on exit.
+        pygame.quit()
+
+if __name__ == '__main__': 
+    gui = GUI()
+    gui.nickname()
