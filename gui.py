@@ -1,17 +1,62 @@
 import pygame
 from Tkinter import *
 
-def main():
+def nickname():
+    global root
+    root = Tk()
+    root.title("Enter a nickname")
+
+    frame = Frame(root)
+    frame.grid(column=0, row=0, sticky=(N, W, E, S))
+    frame.columnconfigure(0, weight=1)
+    frame.rowconfigure(0, weight=1)
+    frame.pack(pady=10, padx=10)
+
+    global size
+    size=20
+
+    # Use dictionary to map names to ages.
+    e = Entry(root)
+    e.pack()
+
+    b = Button(root, text="Choose", command= lambda: servlist())
+    b.pack()
+    root.mainloop()
+
+def servlist():
+    global root
+    root.destroy()
+    root = Tk()
+    root.title("Choose a server")
+
+    frame = Frame(root)
+    frame.grid(column=0, row=0, sticky=(N, W, E, S))
+    frame.columnconfigure(0, weight=1)
+    frame.rowconfigure(0, weight=1)
+    frame.pack(pady=10, padx=10)
+
+    global size
+    size=20
+
+    b = Button(root, text="Choose", command= lambda: gamelist())
+    b.pack()
+    root.mainloop()
+
+
+def gamelist():
+    global root
+    root.destroy()
     root = Tk()
     root.title("Size Selector")
 
-    mainframe = Frame(root)
-    mainframe.grid(column=0, row=0, sticky=(N, W, E, S))
-    mainframe.columnconfigure(0, weight=1)
-    mainframe.rowconfigure(0, weight=1)
-    mainframe.pack(pady=10, padx=10)
+    gamelistframe = Frame(root)
+    gamelistframe.grid(column=0, row=0, sticky=(N, W, E, S))
+    gamelistframe.columnconfigure(0, weight=1)
+    gamelistframe.rowconfigure(0, weight=1)
+    gamelistframe.pack(pady=10, padx=10)
 
     var = StringVar(root)
+    nickname = StringVar(root)
     global size
     size=20
 
@@ -22,11 +67,10 @@ def main():
         'L',
     }
 
-    option = OptionMenu(mainframe, var, *choices)
+    option = OptionMenu(gamelistframe, var, *choices)
     var.set('S')
 
     option.grid(row=1, column=1)
-
 
 
     # change_age is called on var change.
@@ -40,12 +84,11 @@ def main():
     # trace the change of var
     var.trace('w', change_size)
 
-    b = Button(root, text="OK", command= lambda: main2(size))
+    b = Button(root, text="OK", command= lambda: main(size))
     b.pack()
-
     root.mainloop()
 
-def main2(size=20):
+def main(size=20):
 
     # Define some colors
     BLACK = (0, 0, 0)
@@ -131,4 +174,4 @@ def main2(size=20):
     # on exit.
     pygame.quit()
 
-if __name__ == '__main__': main()
+if __name__ == '__main__': nickname()
