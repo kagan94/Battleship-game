@@ -294,19 +294,41 @@ class Client(object):
         print ">> Received resp(%s) on command: %s, server(%s)"\
               % (error_code_to_string(resp_code), command_to_str(command), server_id)
 
+        # +
         if command == COMMAND.CREATE_NEW_GAME:
-            pass
-            # TODO: Update GUI, open new field
+            map_id = data
 
+            if resp_code == RESP.OK:
+                pass
+                # TODO: Update GUI, open new field
+            else:
+                pass
+                # TODO: Update notification area
+
+        # +
         elif command == COMMAND.JOIN_EXISTING_GAME:
-            pass
-            # TODO: Update GUI, open the field with existing game
+            if resp_code == RESP.OK:
+                pass
+                # TODO: Update GUI, open the field with existing game
+            else:
+                # TODO: Update notification area - show errors
+                pass
 
-        elif command == COMMAND.PLACE_SHIP:
+        elif command == COMMAND.PLACE_SHIPS:
             pass
 
+        # +
         elif command == COMMAND.MAKE_HIT:
-            pass
+            if resp_code == RESP.OK:
+                hit, is_game_end = parse_data(data)
+
+                # TODO: Update GUI. Add hit to the map.
+                # TODO: If game end, then block field + update notification area
+
+                # TODO: Check whether ship is completely sank
+            else:
+                pass
+                # TODO: Update notification
 
         elif command == COMMAND.DISCONNECT_FROM_GAME:
             pass
@@ -320,7 +342,7 @@ class Client(object):
         elif command == COMMAND.RESTART_GAME:
             pass
 
-        elif command == COMMAND.INVITE_PLAYERS:
+        elif command == COMMAND.KICK_PLAYER:
             pass
 
         # NOTIFICATIONS FROM SERVER
@@ -328,22 +350,28 @@ class Client(object):
         # 2) Another player damaged my ship
         # 3) My ship sank
         # 4) My turn to move
-        # 5) Another player damaged another player's ship
+        # 5) You're kicked
+        # 6) Another player damaged another player's ship
 
+        # +
         elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
-            joined_player = data
+            joined_player = data  # nickname
+            # (!) Don't need to check resp_code
 
             # TODO: GUI update status bar about joined player
 
         elif command == COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED:
-            pass
 
-        elif command == COMMAND.NOTIFICATION.YOUR_SHIP_SANK:
+            # TODO: Check whether ship is completely sank
             pass
 
         elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
             pass
 
+        elif command == COMMAND.NOTIFICATION.YOU_ARE_KICKED:
+            pass
+
+        # ????? Do we really need it????????????????????????????????????
         elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
             pass
 

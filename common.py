@@ -24,7 +24,7 @@ COMMAND = enum(
     CREATE_NEW_GAME='2',
     JOIN_EXISTING_GAME='3',
 
-    PLACE_SHIP='4',
+    PLACE_SHIPS='4',
     MAKE_HIT='5',
 
     DISCONNECT_FROM_GAME='6',
@@ -33,17 +33,20 @@ COMMAND = enum(
     # New funcs - only for owner
     START_GAME='8',
     RESTART_GAME='9',  # when the game ended
-    INVITE_PLAYERS='10',
+
+    KICK_PLAYER='10',
+    # INVITE_PLAYERS='10',
 
     # Notifications from the server
     NOTIFICATION=enum(
         PLAYER_JOINED_TO_GAME='21',
         YOUR_SHIP_WAS_DAMAGED='22',
-        YOUR_SHIP_SANK='23',
+        # YOUR_SHIP_SANK='23',
         SOMEONES_SHIP_SANK='24',
         YOUR_TURN_TO_MOVE='25',
+        YOU_ARE_KICKED='26',
 
-        SERVER_ONLINE='26'
+        SERVER_ONLINE='27'
     )
 )
 
@@ -107,7 +110,7 @@ def command_to_str(command):
         text = "Create new game"
     elif command == COMMAND.JOIN_EXISTING_GAME:
         text = "Join existing game"
-    elif command == COMMAND.PLACE_SHIP:
+    elif command == COMMAND.PLACE_SHIPS:
         text = "Place ship"
     elif command == COMMAND.MAKE_HIT:
         text = "Make shot"
@@ -119,20 +122,24 @@ def command_to_str(command):
         text = "Start game"
     elif command == COMMAND.RESTART_GAME:
         text = "Restart the game"
-    elif command == COMMAND.INVITE_PLAYERS:
-        text = "Invite players"
+    elif command == COMMAND.KICK_PLAYER:
+        text = "Kick player"
+    # elif command == COMMAND.INVI
+
 
     # Notifications
     elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
         text = "Notif. Another player joined"
     elif command == COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED:
         text = "Notif. Another player damaged my ship"
-    elif command == COMMAND.NOTIFICATION.YOUR_SHIP_SANK:
-        text = "Notif. My ship sank"
+    # elif command == COMMAND.NOTIFICATION.YOUR_SHIP_SANK:
+    #     text = "Notif. My ship sank"
     elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
         text = "Notif. Another player damaged another player's ship"
     elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
         text = "Notif. My turn to move"
+    elif command == COMMAND.NOTIFICATION.YOU_ARE_KICKED:
+        text = "Notif. You're kicked from the map"
     elif command == COMMAND.NOTIFICATION.SERVER_ONLINE:
         text = "Notif. Server become online"
 
