@@ -1,23 +1,22 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from playhouse.pool import PooledMySQLDatabase
+# from playhouse.pool import PooledMySQLDatabase
 from peewee import *
 import datetime
 
 # Establish connection to our DB
-# db = MySQLDatabase('battleship', user='root', password='')
-# db.connect()
+db = MySQLDatabase('battleship', user='root', password='')
+db.connect()
 
-db = PooledMySQLDatabase('battleship',**{
-            "user": "root", "passwd": "",
-            "max_connections":20, "stale_timeout":None,
-            "threadlocals":True
-        })
+# db = PooledMySQLDatabase('battleship',**{
+#             "user": "root", "passwd": "",
+#             "max_connections":20, "stale_timeout":None,
+#             "threadlocals":True
+#         })
 
 
 class BaseModel(Model):
-
     class Meta:
         database = db
 
@@ -79,8 +78,8 @@ class Ship_to_map(BaseModel):
                %(self.location_id, self.map_id, self.player.nickname, self.row_start, self.row_end,
                  self.column_start, self.column_end, self.ship_type)
 
-    class Meta:
-        primary_key = CompositeKey('map', 'player', 'ship_type')
+    # class Meta:
+    #     primary_key = CompositeKey('', 'map', 'player')
 
 
 class Player_hits(BaseModel):

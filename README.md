@@ -18,20 +18,24 @@
 * add new server name in db or get existing server_id (server, models)
 * rewrite queries with server_id (client, server)
 * rewrite queries with chosen server_id (client)
+* request to get list of available servers (servers online. function available_servers) from Redis (client)
+* delete msg about presence in "servers_online" when server goes off-line in Redis (server)
+* possibility to use non-default arguments for Redis, RabbitMQ (client, server)
+* added check on accessibility of DB (server)
+* added try/except on server to close RabbitMQ connection and delete server presence from Redis
+* place player ships randomly (server + on client: command, parse response)
+* saved placed ships in DB
 
 ## TODO Server:
-* place player ships randomly
 * add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in make_hit function)
 * if ship sank, send notification to all players in this game
 * notify next player if hit = 0
 * kick player
 * change admin after timeout
 
-* (!) delete msg about presence in "servers_online" when server goes off-line (ask Artem)
-
 
 ## TODO Client:
-* list of available servers
+* Add "KeyboardInterrupt, SystemExit" after connecting GUI
 
 
 ## TODO GUI:

@@ -12,49 +12,71 @@
 # Imports ===============================================================================================
 # Load models to communicate with DB. Variable "db" can be accessed anywhere in this file
 import pika
+import peewee
+
+# Local files
 from models import *
 from common import *
+from ship_placement import *
+
 from argparse import ArgumentParser  # Parsing command line arguments
+from redis import ConnectionPool, Redis  # Redis middleware
 
 
 # TODO: delete in final version
 def DELETE_ALL_QUEUES():
     import requests
 
-    def rest_queue_list(user='guest', password='guest', host='localhost', port=15672, virtual_host="localhost"):
+    def rest_queue_list(user='guest', password='guest',
+                        host=RABBITMQ_HOST, port=15672, virtual_host=RABBITMQ_VIRTUAL_HOST):
         url = 'http://%s:%s/api/queues/%s' % (host, port, virtual_host or '')
         response = requests.get(url, auth=(user, password))
         queues = [q['name'] for q in response.json()]
         return queues
-    #
-    connection = pika.BlockingConnection(pika.ConnectionParameters(virtual_host=MQ_HOST))
+
+    credentials = pika.PlainCredentials("guest", "guest")
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host=RABBITMQ_HOST,
+                                  virtual_host=RABBITMQ_VIRTUAL_HOST,
+                                  credentials=credentials))
     channel = connection.channel()
 
     for queue_name in rest_queue_list():
         channel.queue_delete(queue=queue_name)
 
     connection.close()
+    print "All queues were deleted"
+
 # DELETE_ALL_QUEUES()
 
 
+def check_db_connection():
+    ''' Check connect with MySQL dababase. If is not return False '''
+    db_connection = True
+    try:
+        db.get_conn().ping(True)
+    except peewee.OperationalError:
+        print "ERROR: Problem with DB connection"
+        db_connection = False
+    return db_connection
+
+
 def refresh_db_connection(f):
-    '''
-        It's a decorator to refresh DB connection
-    '''
+    ''' It's a decorator to refresh DB connection '''
 
     def tmp(*args, **kwargs):
         # It's fix to avoid error "MySQL was gone away".
         # Here we check whether our current db connection is accessible or not (if not, refresh it)
-        db.get_conn().ping(True)
-
-        return f(*args, **kwargs)
+        return f(*args, **kwargs) if check_db_connection() else None
     return tmp
 
 
 class Main_Server(object):
     def __init__(self, server_name):
-        self.channel = None
-        self.connection = None
+        self.rabbitmq_connection = None
+        self.rabbitmq_channel = None
+
+        self.redis_conn = None
 
         self.server_name = server_name
         self.server_id = None
@@ -68,49 +90,84 @@ class Main_Server(object):
 
         # Server already registered in DB, fetch its id
         if server.count() > 0:
-            print "Fetch existing server_id from DB (by server name)"
+            print "- Fetch existing server_id from DB (by server name)"
             self.server_id = str(server.get().server_id)
 
         # Register server in DB
         else:
-            print "Save new server name in DB"
+            print "- Save new server name in DB"
             Server.create(name=self.server_name)
             self.server_id = self.server_id_by_name(self.server_name)
 
-        print "<< Server(%s) sent msg about its presence" % self.server_name
+        print "<< Server(%s) sent server_name to Redis about its presence" % self.server_name
 
-        query = pack_query(COMMAND.NOTIFICATION.SERVER_ONLINE, self.server_name)
-        self.channel.basic_publish(exchange='',
-                                   routing_key="servers_online",
-                                   body=query,
-                                   properties=pika.BasicProperties(
-                                       delivery_mode=1,
-                                   ))
+        # Add server name to the set "servers_online" in Redis
+        self.redis_conn.sadd("servers_online", self.server_name)
 
-        # TODO: !!! delete posted msg about presence, after server goes offline
+    def server_offline(self):
+        '''
+            Remove msg from the set "servers_online". It means server off-line
+        '''
 
-    # def server_offline(self):
-    #     '''
-    #         Delete msg from queue "servers_online" to notify about server e
-    #     '''
+        # Server goes off-line (remove server name from the set "servers_online")
+        self.redis_conn.srem("servers_online", self.server_name)
 
-    def open_connection(self):
+    def open_rabbitmq_connection(self, host, login, password, virtual_host):
+        #############
         # Set up RabbitMQ connection
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(virtual_host=MQ_HOST))
-        self.channel = self.connection.channel()
+        #############
 
-        # "durable" means that queue won't be lost even if RabbitMQ restarts
-        self.channel.queue_declare(queue='register_nickname', durable=True)
-        self.channel.queue_declare(queue='servers_online', durable=True)
+        try:
+            print "- Start establishing connection to RabbitMQ server."
 
-        # Attach triggers to queues
-        self.channel.basic_consume(self.on_register_nickname, queue='register_nickname')
-        self.attach_handler_to_existing_players()
+            credentials = pika.PlainCredentials(login, password)
+            self.rabbitmq_connection = pika.BlockingConnection(
+                            pika.ConnectionParameters(host=host,
+                                                      virtual_host=virtual_host,
+                                                      credentials=credentials))
+            self.rabbitmq_channel = self.rabbitmq_connection.channel()
+
+            print "- Connection to RabbitMQ server is established."
+
+            # "durable" means that queue won't be lost even if RabbitMQ restarts
+            self.rabbitmq_channel.queue_declare(queue='register_nickname', durable=True)
+
+            # Attach triggers to queues
+            self.rabbitmq_channel.basic_consume(self.on_register_nickname, queue='register_nickname')
+            self.attach_handler_to_existing_players()
+
+        except:
+            print "ERROR: Can't access RabbitMQ server, please check connection parameters."
+            self.rabbitmq_connection = None
+
+    def open_redis_connection(self, host, port):
+        #############
+        # Set up Redis connection
+        #############
+
+        print "- Start establishing connection to Redis server."
+
+        pool = ConnectionPool(host=host, port=port, db=0)
+        self.redis_conn = Redis(connection_pool=pool)
+
+        # Check that Redis server is accessible
+        # If not, set redis connection to None
+        if not check_redis_connection(self.redis_conn):
+            self.redis_conn = None
+        else:
+            print "- Connection to Redis server is established."
 
     def start_consuming(self):
         print('[*] Waiting for messages. To exit press CTRL+C')
-        self.channel.start_consuming()
-        self.connection.close()
+
+        try:
+            self.rabbitmq_channel.start_consuming()
+
+        except SystemExit, KeyboardInterrupt:
+            self.rabbitmq_connection.close()
+
+            # Mark server off-line (in Redis)
+            self.server_offline()
 
     def send_response(self, nickname, query):
         '''
@@ -123,12 +180,12 @@ class Main_Server(object):
 
         reply_queue = "resp_" + nickname
 
-        self.channel.basic_publish(exchange='',
-                                   routing_key=reply_queue,
-                                   body=query,
-                                   properties=pika.BasicProperties(
-                                       delivery_mode=2
-                                   ))
+        self.rabbitmq_channel.basic_publish(exchange='',
+                                            routing_key=reply_queue,
+                                            body=query,
+                                            properties=pika.BasicProperties(
+                                                delivery_mode=2
+                                            ))
 
     @refresh_db_connection
     def attach_handler_to_existing_players(self):
@@ -138,92 +195,12 @@ class Main_Server(object):
         for player in Player.select():
             queue_name = 'req_' + player.nickname
 
-            self.channel.queue_declare(queue=queue_name, durable=True)
-            self.channel.basic_consume(self.on_user_request, queue=queue_name)
+            self.rabbitmq_channel.queue_declare(queue=queue_name, durable=True)
+            self.rabbitmq_channel.basic_consume(self.on_user_request, queue=queue_name)
 
-    # Handlers for queue ===================================================================================
-    def on_register_nickname(self, ch, method, props, body):
-        print(">> Received command to register nickname: %s" % body)
-
-        command, server_id, nickname = parse_query(body)
-
-        resp_code = self.register_nickname(nickname)
-        response = pack_resp(COMMAND.REGISTER_NICKNAME, resp_code, data=nickname)
-
-        print "Resp_code: %s" % resp_code
-
-        ch.basic_publish(exchange='',
-                         routing_key=props.reply_to,
-                         body=response)
-
-        # Remove msg after reading
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-
-    def on_user_request(self, ch, method, props, body):
-        '''
-        It's main handler to process players requests
-
-        :param ch: channel
-        :param method: -
-        :param props: -
-        :param body: message
-        '''
-
-        query = None
-
-        nickname = method.routing_key[len("req_"):]
-        player_id = self.player_id_by_nickname(nickname)
-
-        command, server_id, data = parse_query(body)
-
-        print ">> Received command: %s, data: %s" % (command_to_str(command), data)
-
-        # +
-        if command == COMMAND.CREATE_NEW_GAME:
-            resp_code, map_id = self.create_new_map(owner_id=player_id, name=data,
-                                                    rows='5', columns='5')
-            query = pack_resp(command, resp_code, self.server_id, data=map_id)
-
-        # +
-        elif command == COMMAND.JOIN_EXISTING_GAME:
-            resp_code = self.join_game(map_id=data, player_id=player_id, player_nickname=nickname)
-            query = pack_resp(command, resp_code, self.server_id)
-
-        elif command == COMMAND.PLACE_SHIPS:
-            pass
-
-        # +
-        elif command == COMMAND.MAKE_HIT:
-            map_id, row, column = parse_data(data)
-
-            resp_code, hit, is_game_end = self.make_hit(map_id, player_id, row, column)
-            data = pack_data([hit, is_game_end])
-
-            query = pack_resp(command, resp_code, self.server_id, data)
-
-        elif command == COMMAND.DISCONNECT_FROM_GAME:
-            pass
-
-        elif command == COMMAND.QUIT_FROM_GAME:
-            pass
-
-        elif command == COMMAND.START_GAME:
-            pass
-
-        elif command == COMMAND.RESTART_GAME:
-            pass
-
-        elif command == COMMAND.KICK_PLAYER:
-            pass
-
-        # Put response into the queue
-        if query:
-            self.send_response(nickname=nickname, query=query)
-
-        # Remove read msg rom queue
-        self.channel.basic_ack(delivery_tag=method.delivery_tag)
-
+    ###################
     # Main functions =====================================================================================
+    ###################
     @refresh_db_connection
     def server_id_by_name(self, server_name):
         return Server.get(Server.name == server_name).server_id
@@ -258,11 +235,11 @@ class Main_Server(object):
             req_nickname_queue = "req_" + nickname
             resp_nickname_queue = "resp_" + nickname
 
-            self.channel.queue_declare(queue=req_nickname_queue, durable=True)
-            self.channel.queue_declare(queue=resp_nickname_queue, durable=True)
+            self.rabbitmq_channel.queue_declare(queue=req_nickname_queue, durable=True)
+            self.rabbitmq_channel.queue_declare(queue=resp_nickname_queue, durable=True)
 
             # print "req_nickname_queue: %s" % req_nickname_queue
-            self.channel.basic_consume(self.on_user_request, queue=req_nickname_queue)
+            self.rabbitmq_channel.basic_consume(self.on_user_request, queue=req_nickname_queue)
 
         return resp_code
 
@@ -299,7 +276,7 @@ class Main_Server(object):
             # TODO: add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
 
             # TODO: if shot was successful, check is the game ended and change var "is_game_end"
-            is_game_end = 1  # ?????? change later
+            is_game_end = "1"  # ?????? change later
 
             # TODO: Check whether ship is completely sank, then send argument "completely_sank" to player who made shot
 
@@ -375,6 +352,91 @@ class Main_Server(object):
 
         return resp_code
 
+    ###################
+    # Handlers for queue ===================================================================================
+    ###################
+    def on_register_nickname(self, ch, method, props, body):
+        print(">> Received command to register nickname: %s" % body)
+
+        command, server_id, nickname = parse_query(body)
+
+        resp_code = self.register_nickname(nickname)
+        response = pack_resp(COMMAND.REGISTER_NICKNAME, resp_code, data=nickname)
+
+        print "Resp_code: %s" % resp_code
+
+        ch.basic_publish(exchange='',
+                         routing_key=props.reply_to,
+                         body=response)
+
+        # Remove msg after reading
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    def on_user_request(self, ch, method, props, body):
+        '''
+        It's main handler to process players requests
+
+        :param ch: channel
+        :param method: -
+        :param props: -
+        :param body: message
+        '''
+
+        query = None
+
+        nickname = method.routing_key[len("req_"):]
+        player_id = self.player_id_by_nickname(nickname)
+
+        command, server_id, data = parse_query(body)
+
+        print ">> Received command: %s, data: %s" % (command_to_str(command), data)
+
+        # +
+        if command == COMMAND.CREATE_NEW_GAME:
+            resp_code, map_id = self.create_new_map(owner_id=player_id, name=data,
+                                                    rows='5', columns='5')
+            query = pack_resp(command, resp_code, self.server_id, data=map_id)
+
+        # +
+        elif command == COMMAND.JOIN_EXISTING_GAME:
+            resp_code = self.join_game(map_id=data, player_id=player_id, player_nickname=nickname)
+            query = pack_resp(command, resp_code, self.server_id)
+
+        # +
+        elif command == COMMAND.PLACE_SHIPS:
+            resp_code, data = place_ships(map_id=data, player_id=player_id)
+            query = pack_resp(command, resp_code, self.server_id, data)
+
+        # +
+        elif command == COMMAND.MAKE_HIT:
+            map_id, row, column = parse_data(data)
+
+            resp_code, hit, is_game_end = self.make_hit(map_id, player_id, row, column)
+            data = pack_data([hit, is_game_end])
+
+            query = pack_resp(command, resp_code, self.server_id, data)
+
+        elif command == COMMAND.DISCONNECT_FROM_GAME:
+            pass
+
+        elif command == COMMAND.QUIT_FROM_GAME:
+            pass
+
+        elif command == COMMAND.START_GAME:
+            pass
+
+        elif command == COMMAND.RESTART_GAME:
+            pass
+
+        elif command == COMMAND.KICK_PLAYER:
+            pass
+
+        # Put response into the queue
+        if query:
+            self.send_response(nickname=nickname, query=query)
+
+        # Remove read msg rom queue
+        self.rabbitmq_channel.basic_ack(delivery_tag=method.delivery_tag)
 
 # nickname = "sdasds"
 # player_id = Player.get(Player.nickname == nickname).player_id
@@ -416,11 +478,34 @@ class Main_Server(object):
 #     print s.map_id, s.owner_id
 
 
+###################
+# Main function to parse args and run server
+###################
 def main():
     # Parsing arguments
     parser = ArgumentParser()
     parser.add_argument('-n', '--server_name',
                         help='Enter server name')
+
+    # Args for RabbitMQ
+    parser.add_argument('-rmqh','--rabbitmq_host',
+                        help='Host for RabbitMQ connection, default is %s' % RABBITMQ_HOST,
+                        default=RABBITMQ_HOST)
+    parser.add_argument('-rmqcr','--rabbitmq_credentials',
+                        help='Credentials for RabbitMQ connection in format "login:password",'
+                             'default is %s' % RABBITMQ_CREDENTIALS,
+                        default=RABBITMQ_CREDENTIALS)
+    parser.add_argument('-rmqvh','--rabbitmq_virtual_host',
+                        help='Virtual host for RabbitMQ connection, default is "%s"' % RABBITMQ_VIRTUAL_HOST,
+                        default=RABBITMQ_VIRTUAL_HOST)
+
+    # Args for Redis
+    parser.add_argument('-rh', '--redis_host',
+                        help='Host for Redis connection, default is %s' % REDIS_HOST,
+                        default=REDIS_HOST)
+    parser.add_argument('-rp', '--redis_port', type=int,
+                        help='Port for Redis connection, default is %d' % REDIS_PORT,
+                        default=REDIS_PORT)
 
     args = parser.parse_args()
     server_name = args.server_name
@@ -432,14 +517,38 @@ def main():
         print "Please, specify server name."
         parser.print_help()
 
+    # Can't access MySQL server
+    elif not check_db_connection():
+        return
+
+    # Run server
     else:
         server = Main_Server(server_name)
-        server.open_connection()
 
-        # Show clients that server online
-        server.server_online()
+        server.open_redis_connection(args.redis_host, args.redis_port)
 
-        server.start_consuming()
+        login, password = args.rabbitmq_credentials.split(":")
+        server.open_rabbitmq_connection(args.rabbitmq_host, login, password, args.rabbitmq_virtual_host)
+
+        # If connections to RabbitMQ and Rebis were established successfully, run server
+        if server.rabbitmq_connection and server.redis_conn:
+            print "####################"
+
+            # Show clients that server online (in Redis)
+            server.server_online()
+
+            try:
+                server.start_consuming()
+
+            except (KeyboardInterrupt, SystemExit):
+                print 'Terminating ...'
+
+                server.rabbitmq_connection.close()
+
+                # Show clients that server is not online anymore (in Redis)
+                # Mark server off-line (in Redis)
+                server.server_offline()
+
 
 if __name__ == "__main__":
     main()

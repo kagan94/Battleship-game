@@ -7,8 +7,14 @@ path.append(a_path)
 
 
 # Constants -------------------------------------------------------------------
-MQ_HOST = "localhost"
-MQ_PORT = 15672
+# Default arguments for connection to RabbitMQ servers and Redis server
+RABBITMQ_HOST = "localhost"
+RABBITMQ_CREDENTIALS = "guest:guest"
+RABBITMQ_VIRTUAL_HOST = "/"
+
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+
 SEP = "|"  # separate command and data in request
 SEP_DATA = ":"
 # TIMEOUT = 5  # in seconds
@@ -46,7 +52,7 @@ COMMAND = enum(
         YOUR_TURN_TO_MOVE='25',
         YOU_ARE_KICKED='26',
 
-        SERVER_ONLINE='27'
+        # SERVER_ONLINE='27'
     )
 )
 
@@ -60,7 +66,9 @@ RESP = enum(
     MAP_NAME_ALREADY_EXISTS='4',
     MAP_DOES_NOT_EXIST='5',
     GAME_ALREADY_STARTED='6',
-    ALREADY_JOINED_TO_MAP='7'
+    ALREADY_JOINED_TO_MAP='7',
+
+    LACK_OF_PLACE_FOR_SHIPS='8'
 )
 
 
@@ -90,6 +98,8 @@ def error_code_to_string(err_code):
         err_text = "Game already started"
     elif err_code == RESP.ALREADY_JOINED_TO_MAP:
         err_text = "You already joined to requested map"
+    elif err_code == RESP.LACK_OF_PLACE_FOR_SHIPS:
+        err_text = "There's no place to locate all ships"
     return err_text
 
 
@@ -140,8 +150,7 @@ def command_to_str(command):
         text = "Notif. My turn to move"
     elif command == COMMAND.NOTIFICATION.YOU_ARE_KICKED:
         text = "Notif. You're kicked from the map"
-    elif command == COMMAND.NOTIFICATION.SERVER_ONLINE:
-        text = "Notif. Server become online"
+    # elif command == COMMAND.NOTIFICASERVER_ONLINE
 
     return text
 
@@ -198,3 +207,14 @@ def parse_data(raw_data):
     '''
     # Split string by SEP_DATA separator to get data list from raw_data
     return raw_data.split(SEP_DATA)
+
+
+# Check that connection with Redis is alive
+def check_redis_connection(redis_connection):
+    try:
+        r_ping = redis_connection.ping()
+    except:
+        r_ping = False
+        print "ERROR: Can't access Redis server, please check connection parameters"
+    return r_ping
+
