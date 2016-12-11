@@ -16,11 +16,13 @@ def start_logger():
 import pika  # for Msg Queue
 import uuid  # for generating unique correcaltion_id
 import ConfigParser as CP
-from common import *
 from threading import Thread
 from argparse import ArgumentParser  # Parsing command line arguments
 from redis import ConnectionPool, Redis  # Redis middleware
 
+# Local files
+from gui import *
+from common import *
 
 # Path to the config file
 current_path = os.path.abspath(os.path.dirname(__file__))
@@ -34,7 +36,7 @@ class Client(object):
 
     nickname = None
 
-    temp_queue = None
+    temp_queue, temp_queue_name = None, ""
     chosen_server_id = None
 
     def __init__(self):
@@ -96,8 +98,8 @@ class Client(object):
 
         request_queue = 'req_' + self.nickname
         self.rabbitmq_channel.basic_publish(exchange='',
-                                   routing_key=request_queue,
-                                   body=query)
+                                            routing_key=request_queue,
+                                            body=query)
 
     def check_nickname(self):
         '''
@@ -113,6 +115,9 @@ class Client(object):
 
             self.nickname = conf.get('USER_INFO', 'nickname')
 
+            # Run servers_online window
+            self.gui.choose_server_window()
+
         # Nickname wasn't found in local config
         else:
             # Create temp queue to collect the response from "register_nickname" operation
@@ -120,22 +125,11 @@ class Client(object):
                 self.temp_queue = self.rabbitmq_channel.queue_declare()
                 self.temp_queue_name = self.temp_queue.method.queue
 
-            print "Try to register nickname"
-
-            # TODO: Create GUI window to enter nickname (Ask player to enter his nickname)
-            nickname = "dsa"
-
-            # Put msg into MQ to register mes
-            self.register_nickname(nickname)
-
             # Bind some triggers to queues
             self.rabbitmq_channel.basic_consume(self.on_response, queue=self.temp_queue_name)
 
-            while self.nickname is None:
-                self.rabbitmq_connection.process_data_events()
-
-            # Nickname received
-            # TODO: Unblock the window
+            # TODO: Launch GUI window to enter nickname (Ask player to enter his nickname)
+            self.gui.nickname_window()
 
     def register_nickname(self, nickname):
         '''
@@ -143,18 +137,22 @@ class Client(object):
 
         :param nickname: (str)
         '''
-        nickname = "my_nicknam1234" + str(uuid.uuid4())
+        # nickname = "my_nicknam1234" + str(uuid.uuid4())
 
         command = COMMAND.REGISTER_NICKNAME
         query = pack_query(command, data=nickname)
 
         self.rabbitmq_channel.basic_publish(exchange='',
-                                   routing_key='register_nickname',
-                                   body=query,
-                                   properties=pika.BasicProperties(
-                                       reply_to=self.temp_queue_name,
-                                       delivery_mode=2
-                                   ))
+                                            routing_key='register_nickname',
+                                            body=query,
+                                            properties=pika.BasicProperties(
+                                                reply_to=self.temp_queue_name,
+                                                delivery_mode=2
+                                            ))
+
+        print "Try to register nickname"
+        while self.nickname is None:
+            self.rabbitmq_connection.process_data_events()
 
         # resp_code, hit = register_hit(map_id, player_id, row, column)
 
@@ -261,8 +259,11 @@ class Client(object):
                 if self.temp_queue:
                     self.rabbitmq_channel.queue_delete(queue=self.temp_queue_name)
 
-                # TODO: Unblock GUI window
+                self.gui.choose_server_window()
+
             else:
+                # Unfreeze blocked submit button in GUI
+                self.gui.check_nick_button.config(state=NORMAL)
                 print "Register nickname error: %s" % error_code_to_string(resp_code)
 
         # +
@@ -425,6 +426,11 @@ def main():
 
     # Before Client starts working, we need to check connections to RabbitMQ and Redis
     client = Client()
+    gui = GUI()
+
+    # Client can trigger GUI and vice-versa (at anytime)
+    client.gui = gui
+    gui.client = client
 
     # Open connection to Redis server
     client.open_redis_connection(args.redis_host, args.redis_port)
@@ -440,7 +446,7 @@ def main():
         client.check_nickname()
 
         # TODO: In GUI. Add list of available servers which player can choose
-        print client.available_servers()
+        # print client.available_servers()
 
         # We connected to chosen server
         client.chosen_server_id = '1'
@@ -450,13 +456,10 @@ def main():
             request_queue = 'req_' + client.nickname
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)
 
-            client.create_new_game("abc game")
-
-            client.register_hit(map_id='74', target_row='2', target_column='2')
-
-            client.join_game(map_id='74')
-
-            client.place_ships(map_id='74')
+            # client.create_new_game("abc game")
+            # client.register_hit(map_id='74', target_row='2', target_column='2')
+            # client.join_game(map_id='74')
+            # client.place_ships(map_id='74')
 
             # Start notification loop
             notifications_thread = Thread(name='NotificationsThread',

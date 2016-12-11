@@ -50,7 +50,7 @@ COMMAND = enum(
         # YOUR_SHIP_SANK='23',
         SOMEONES_SHIP_SANK='24',
         YOUR_TURN_TO_MOVE='25',
-        YOU_ARE_KICKED='26',
+        YOU_ARE_KICKED='26'
 
         # SERVER_ONLINE='27'
     )

@@ -25,6 +25,8 @@
 * added try/except on server to close RabbitMQ connection and delete server presence from Redis
 * place player ships randomly (server + on client: command, parse response)
 * saved placed ships in DB
+* form to create a nickname (GUI)
+* list of servers online (GUI)
 
 ## TODO Server:
 * add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in make_hit function)
@@ -39,12 +41,12 @@
 
 
 ## TODO GUI:
-* form to create a nickname
 * form to create a new field + size of field
 * create random ships locations on the map
 * show the map of ships location for player
 * spectator mode
-* remove double-click (as triger) on the same coordinate on the field that user can click only once on one coordinate.
+* remove double-click (as triger) on the same coordinate on the field that user can click only once on one coordinate
+* Remove glitch with window freezeing while waiting for the response (Maybe through using separate Thread for GUI)
 
 
 ![SQL db scatch](http://clip2net.com/clip/m527982/98592-clip-43kb.png)

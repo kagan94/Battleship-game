@@ -534,9 +534,6 @@ def main():
         if server.rabbitmq_connection and server.redis_conn:
             print "####################"
 
-            # Show clients that server online (in Redis)
-            server.server_online()
-
             try:
                 server.start_consuming()
 
