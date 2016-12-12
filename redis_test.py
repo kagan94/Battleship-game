@@ -19,13 +19,19 @@ if check_redis_connection():
     server_name = "serv_1"
 
     # Show that server online now (in Redis)
-    r.sadd("servers_online", server_name)
+    # r.sadd("servers_online", server_name)
+    m = r.hgetall("servers_online")
+
+    print type(m)
+    print r.hexists("servers_online", 8)
+    print r.hdel("servers_online", 2)
 
     # Server goes off-line
-    r.srem("servers_online", server_name)
+    # r.srem("servers_online", server_name)
 
     # Set of servers online (Redis)
-    servers_online = r.smembers("servers_online")
+    # servers_online = r.smembers("servers_online")
+    servers_online = False
 
     if servers_online:
         # Convert set of servers to list

@@ -2,6 +2,7 @@ import pygame
 import tkMessageBox
 from Tkinter import *
 from ScrolledText import *
+from threading import Thread
 
 
 class GUI(object):
@@ -11,6 +12,11 @@ class GUI(object):
         self.frame = None
 
         self.selected_server = None
+        self.selected_server_id = None
+
+        self.maps = {}
+        self.selected_map = None
+        self.selected_map_id = None
 
     def nickname_window(self):
         self.root = Tk()
@@ -22,7 +28,6 @@ class GUI(object):
         self.frame.rowconfigure(0, weight=1)
         self.frame.pack(pady=10, padx=10)
 
-        self.size = 20
         self.name = Label(self.root, text="Enter a nickname")
         self.name.pack()
 
@@ -57,29 +62,96 @@ class GUI(object):
         self.servers_list.bind('<<ListboxSelect>>', self.on_server_selection)
 
         # Join server button
-        self.join_server_b = Button(self.root, text="Choose", command=self.game_list_window)
+        self.join_server_b = Button(self.root, text="Connect", command=self.select_map_window)
         self.join_server_b.pack()
 
         # Show client which servers are on-line (get from Redis)
-        servers_online = self.client.available_servers()
+        self.servers_online = self.client.available_servers()
 
-        for server_name in servers_online:
+        for server_name in self.servers_online.values():
             self.servers_list.insert(END, server_name + "\n")
 
         self.root.mainloop()
 
-    def game_list_window(self):
+    def select_map_window(self):
+        # Destroy previous window
+        if self.root:
+            self.root.destroy()
+
+        self.selected_map = None
+
+        self.root = Tk()
+        self.root.title("Choose a game")
+
+        self.frame = Frame(self.root)
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(0, weight=1)
+        self.frame.pack(pady=10, padx=10)
+
+        self.game_l = Label(self.root, text="Choose a game")
+        self.game_l.pack()
+
+        # Servers on-line list
+        self.maps_list = Listbox(self.root, height=12)
+        self.maps_list.pack()
+        self.maps_list.bind('<<ListboxSelect>>', self.on_server_selection)
+
+        # Join server button
+        self.join_game_b = Button(self.root, text="Connect to selected map", command=self.on_connect_to_map)
+        self.join_game_b.pack()
+
+        self.create_new_game_b = Button(self.root, text="Create new map", command=self.create_new_game_window)
+        self.create_new_game_b.pack()
+
+        # Show available servers on this server
+        self.client.available_maps()
+
+        # TODO: Add here list of possible games on this
+
+        self.root.after(500, self.do_stuff)
+
+        self.root.mainloop()
+        # while True:
+        #     self.root.update_idletasks()
+        #     self.root.update()
+
+    def do_stuff(self, event=None):
+        if len(self.maps) == 0:
+            # Do recheck every 500 ms
+
+            self.root.after(500, self.do_stuff)
+
+    def update_maps_list(self):
+        '''
+        Update list of maps inside window choose maps
+
+        :param maps: (dict) map_id: map_name
+        '''
+        # self.maps is a dict[map_id] = {"name":map_name, "size": [rows, columns]]
+
+        for map_params in self.maps.values():
+            print map_params["name"]
+            # map_params["name"] + "\n"
+            # self.maps_list.insert(END, "76767")
+
+    def on_connect_to_map(self):
+        if self.selected_map is None:
+            self.join_game_b.config(state=DISABLED)
+            self.create_new_game_b.config(state=DISABLED)
+
+            # TODO: Request to connect to the map
+
+    def create_new_game_window(self):
         self.root.destroy()
         self.root = Tk()
-        self.root.title("Size Selector")
+        self.root.title("Create new game")
 
         self.gamelistframe = Frame(self.root)
         self.gamelistframe.grid(column=0, row=0, sticky=(N, W, E, S))
         self.gamelistframe.columnconfigure(0, weight=1)
         self.gamelistframe.rowconfigure(0, weight=1)
         self.gamelistframe.pack(pady=10, padx=10)
-
-        self.var = StringVar(self.root)
 
         self.field = Label(self.root, text="Select a size of the field")
         self.field.pack()
@@ -92,21 +164,24 @@ class GUI(object):
             'L',
         }
 
-        self.option = OptionMenu(self.gamelistframe, self.var, *choices)
-        self.var.set('S')
+        self.field_size = StringVar(self.root)
+        self.option = OptionMenu(self.gamelistframe, self.field_size, *choices)
+
+        # Set default field size to "Small"
+        self.field_size.set('S')
 
         self.option.grid(row=1, column=1)
 
         def change_size(*args):
             global size
-            self.choice = self.var.get()
+            self.choice = self.field_size.get()
 
             if self.choice == "S": self.size = 20
-            if self.choice == "M": self.size = 40
-            if self.choice == "L": self.size = 50
+            elif self.choice == "M": self.size = 40
+            elif self.choice == "L": self.size = 50
 
         # trace the change of var
-        self.var.trace('w', change_size)
+        self.field_size.trace('w', change_size)
 
         self.b = Button(self.root, text="OK", command=self.main)
         self.b.pack()
@@ -232,7 +307,15 @@ class GUI(object):
         if selected_server is not None and (self.selected_server != selected_server):
             self.selected_server = selected_server
 
-            print self.selected_server
+            # Get selected server_id by selected server name
+            self.selected_server_id = self.servers_online.keys()[
+                                        self.servers_online.values().index(selected_server)]
+
+            print self.selected_server, self.selected_server_id
+
+            self.client.chosen_server_id = self.selected_server_id
+
+
 
 # if __name__ == '__main__':
     # gui = GUI()

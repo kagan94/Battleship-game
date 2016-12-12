@@ -27,20 +27,22 @@ def enum(**vals):
 
 COMMAND = enum(
     REGISTER_NICKNAME='1',
-    CREATE_NEW_GAME='2',
-    JOIN_EXISTING_GAME='3',
 
-    PLACE_SHIPS='4',
-    MAKE_HIT='5',
+    LIST_OF_MAPS='2',
+    CREATE_NEW_GAME='3',
+    JOIN_EXISTING_GAME='4',
 
-    DISCONNECT_FROM_GAME='6',
-    QUIT_FROM_GAME='7',  # after quit, user can't go back to the game
+    PLACE_SHIPS='5',
+    MAKE_HIT='6',
+
+    DISCONNECT_FROM_GAME='7',
+    QUIT_FROM_GAME='8',  # after quit, user can't go back to the game
 
     # New funcs - only for owner
-    START_GAME='8',
-    RESTART_GAME='9',  # when the game ended
+    START_GAME='9',
+    RESTART_GAME='10',  # when the game ended
 
-    KICK_PLAYER='10',
+    KICK_PLAYER='11',
     # INVITE_PLAYERS='10',
 
     # Notifications from the server
@@ -116,6 +118,8 @@ def command_to_str(command):
 
     if command == COMMAND.REGISTER_NICKNAME:
         text = "Register nickname"
+    if command == COMMAND.LIST_OF_MAPS:
+        text = "List of available maps"
     elif command == COMMAND.CREATE_NEW_GAME:
         text = "Create new game"
     elif command == COMMAND.JOIN_EXISTING_GAME:

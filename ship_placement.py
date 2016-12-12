@@ -106,7 +106,7 @@ def place_ships(map_id, player_id):
         ship_coord = (x1, x2, y1, y2, ship_size)
         new_ships.append(ship_coord)
 
-        # For compressed query
+        # Compress data
         for el in zip(ship_coord):
             new_ships_data.append(str(el[0]))
 

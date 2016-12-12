@@ -30,17 +30,15 @@ config_file = os.path.join(current_path, "config.ini")
 
 
 class Client(object):
-    gui = None
-    connection = None
-    channel = None
-
-    nickname = None
-
-    temp_queue, temp_queue_name = None, ""
-    chosen_server_id = None
-
     def __init__(self):
         self.nickname = None
+        self.gui = None
+
+        self.rabbitmq_connection = None
+        self.rabbitmq_channel = None
+
+        self.temp_queue, temp_queue_name = None, ""
+        self.chosen_server_id = None
 
     def open_rabbitmq_connection(self, host, login, password, virtual_host):
         #############
@@ -101,6 +99,7 @@ class Client(object):
                                             routing_key=request_queue,
                                             body=query)
 
+    # Main methods for GUI ============================================================
     def check_nickname(self):
         '''
         :return: (str) if nickname exists locally, return it. Otherwise False.
@@ -128,7 +127,7 @@ class Client(object):
             # Bind some triggers to queues
             self.rabbitmq_channel.basic_consume(self.on_response, queue=self.temp_queue_name)
 
-            # TODO: Launch GUI window to enter nickname (Ask player to enter his nickname)
+            # Launch GUI window to enter nickname (Ask player to enter his nickname)
             self.gui.nickname_window()
 
     def register_nickname(self, nickname):
@@ -154,11 +153,6 @@ class Client(object):
         while self.nickname is None:
             self.rabbitmq_connection.process_data_events()
 
-        # resp_code, hit = register_hit(map_id, player_id, row, column)
-
-        # TODO: Block the window
-
-    # Main methods for GUI ============================================================
     def create_new_game(self, game_name):
         '''
         Register a new game on the server
@@ -205,22 +199,28 @@ class Client(object):
         '''
         :return: (list) of serves in state on-line
         '''
-        servers = []
+        # Request to get server online from Redis (from hash map)
+        # Dictionary of servers online (key:val => server_id:server_name)
+        servers = self.redis_conn.hgetall("servers_online")
 
-        # Request to get server online from Redis
-        # Set of servers online
-        servers_online = self.redis_conn.smembers("servers_online")
-
-        if servers_online:
-            # Convert set of servers to list
-            servers = sorted(list(servers_online))
-            servers.sort()
-
-            print "Servers online: " + ", ".join(servers)
+        if servers:
+            print "Servers online: " + ", ".join(list(servers.values()))
         else:
             print "All server are off-line"
 
         return servers
+
+    def available_maps(self):
+        '''
+        Request to get available maps on the chosen server
+
+        :return: (list) of maps
+        '''
+
+        query = pack_query(COMMAND.LIST_OF_MAPS, self.chosen_server_id)
+
+        # Put query to register a new hit
+        self.send_request(query)
 
     # Handlers ========================================================================
     def on_response(self, channel, method, props, body):
@@ -238,6 +238,7 @@ class Client(object):
         print ">> Received resp(%s) on command: %s, server(%s)"\
               % (error_code_to_string(resp_code), command_to_str(command), server_id)
 
+        # +
         if command == COMMAND.REGISTER_NICKNAME:
             ''' Handler to receive response on request reg_me '''
             command, resp_code, server_id, data = parse_response(body)
@@ -265,6 +266,23 @@ class Client(object):
                 # Unfreeze blocked submit button in GUI
                 self.gui.check_nick_button.config(state=NORMAL)
                 print "Register nickname error: %s" % error_code_to_string(resp_code)
+
+        elif command == COMMAND.LIST_OF_MAPS:
+            maps_data = parse_data(data)
+            self.gui.maps = {}
+
+            # Decompress maps (map_id, map_name, rows, columns) to dict[map_id] = [params]
+            for i in range(0, len(maps_data), 4):
+                map_id = maps_data[i]
+                map_name, rows, columns = maps_data[i + 1], maps_data[i + 2], maps_data[i + 3]
+
+                self.gui.maps[map_id] = {
+                    "name": map_name,
+                    "size": [rows, columns]
+                }
+
+            # Trigger GUI to update maps list
+            self.gui.update_maps_list()
 
         # +
         elif command == COMMAND.CREATE_NEW_GAME:
@@ -370,8 +388,7 @@ class Client(object):
     #############
     def notifications_loop(self, host, login, password, virtual_host):
         ''' Open new RabbitMQ connection to receive notifications '''
-        if 1:
-        # try:
+        try:
             print "- Start establishing connection to RabbitMQ server."
 
             credentials = pika.PlainCredentials(login, password)
@@ -394,8 +411,8 @@ class Client(object):
             if not connection.is_closed:
                 connection.close()
 
-        # except:
-        #     print "ERROR: Can't access RabbitMQ server, please check connection parameters."
+        except:
+            print "ERROR (in notif. loop): Can't access RabbitMQ server, please check connection parameters."
 
 
 def main():
@@ -427,7 +444,7 @@ def main():
     # Before Client starts working, we need to check connections to RabbitMQ and Redis
     client = Client()
     gui = GUI()
-
+    
     # Client can trigger GUI and vice-versa (at anytime)
     client.gui = gui
     gui.client = client
@@ -449,9 +466,9 @@ def main():
         # print client.available_servers()
 
         # We connected to chosen server
-        client.chosen_server_id = '1'
+        # client.chosen_server_id = '1'  and client.chosen_server_id
 
-        if client.nickname and client.chosen_server_id:
+        if client.nickname:
             # Declare queue to put requests
             request_queue = 'req_' + client.nickname
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)

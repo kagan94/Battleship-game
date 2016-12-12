@@ -101,8 +101,10 @@ class Main_Server(object):
 
         print "<< Server(%s) sent server_name to Redis about its presence" % self.server_name
 
-        # Add server name to the set "servers_online" in Redis
-        self.redis_conn.sadd("servers_online", self.server_name)
+        # Add server name to the hash set "servers_online" in Redis
+        # (in format key:value)
+        if not self.redis_conn.hexists("servers_online", self.server_id):
+            self.redis_conn.hset("servers_online", self.server_id, self.server_name)
 
     def server_offline(self):
         '''
@@ -110,7 +112,8 @@ class Main_Server(object):
         '''
 
         # Server goes off-line (remove server name from the set "servers_online")
-        self.redis_conn.srem("servers_online", self.server_name)
+        if not self.redis_conn.hexists("servers_online", self.server_id):
+            self.redis_conn.hdel("servers_online", self.server_id)
 
     def open_rabbitmq_connection(self, host, login, password, virtual_host):
         #############
@@ -198,7 +201,10 @@ class Main_Server(object):
             self.rabbitmq_channel.queue_declare(queue=queue_name, durable=True)
             self.rabbitmq_channel.basic_consume(self.on_user_request, queue=queue_name)
 
-    ###################
+            # Create queue to put responses for particular user
+            self.rabbitmq_channel.queue_declare(queue='resp_' + player.nickname, durable=True)
+
+###################
     # Main functions =====================================================================================
     ###################
     @refresh_db_connection
@@ -352,6 +358,27 @@ class Main_Server(object):
 
         return resp_code
 
+    @refresh_db_connection
+    def list_of_maps(self):
+        '''
+        :return: (data) - packed data in format (map_id, map_name, rows, columns)
+        '''
+        data = ""
+        maps_data = []
+
+        # Get all games which have not been started yet
+        maps_query = Map.select().where(Map.server == self.server_id,
+                                        Map.game_started == 0)
+
+        for m in maps_query:
+            # Compress data
+            map_data = (m.map_id, m.name, m.rows, m.columns)
+            for el in zip(map_data):
+                maps_data.append(str(el[0]))
+
+        data = pack_data(maps_data)
+        return RESP.OK, data
+
     ###################
     # Handlers for queue ===================================================================================
     ###################
@@ -391,8 +418,11 @@ class Main_Server(object):
 
         print ">> Received command: %s, data: %s" % (command_to_str(command), data)
 
-        # +
-        if command == COMMAND.CREATE_NEW_GAME:
+        if command == COMMAND.LIST_OF_MAPS:
+            resp_code, data = self.list_of_maps()
+            query = pack_resp(command, resp_code, self.server_id, data)
+
+        elif command == COMMAND.CREATE_NEW_GAME:
             resp_code, map_id = self.create_new_map(owner_id=player_id, name=data,
                                                     rows='5', columns='5')
             query = pack_resp(command, resp_code, self.server_id, data=map_id)
@@ -535,6 +565,10 @@ def main():
             print "####################"
 
             try:
+                # Mark server on-line (in Redis)
+                server.server_online()
+
+                # Start receiving queries
                 server.start_consuming()
 
             except (KeyboardInterrupt, SystemExit):
