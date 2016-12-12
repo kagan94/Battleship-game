@@ -54,9 +54,10 @@ class Map(BaseModel):
 class Player_to_map(BaseModel):
     map = ForeignKeyField(Map)
     player = ForeignKeyField(Player, related_name="maps")  # user's playing on these maps
+    time_connected = DateTimeField(default=datetime.datetime.now)
 
     def __str__(self):
-        return "Map_id:%s, player:%s" % (self.map_id, self.player.nickname)
+        return "Map_id:%s, player:%s, time_connected:%s" % (self.map_id, self.player.nickname, self.time_connected)
 
     class Meta:
         primary_key = CompositeKey('map', 'player')

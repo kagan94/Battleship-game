@@ -444,7 +444,8 @@ def main():
     # Before Client starts working, we need to check connections to RabbitMQ and Redis
     client = Client()
     gui = GUI()
-    
+
+
     # Client can trigger GUI and vice-versa (at anytime)
     client.gui = gui
     gui.client = client

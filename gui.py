@@ -30,10 +30,10 @@ class GUI(object):
 
         self.name = Label(self.root, text="Enter a nickname")
         self.name.pack()
-
         self.nickname = StringVar()
         self.e = Entry(self.root, textvariable=self.nickname)
         self.e.pack()
+
 
         self.check_nick_button = Button(self.root, text="Choose", command=self.on_nickname_submit)
         self.check_nick_button.pack()
@@ -65,6 +65,9 @@ class GUI(object):
         self.join_server_b = Button(self.root, text="Connect", command=self.select_map_window)
         self.join_server_b.pack()
 
+        # if self.select_map_window is None:
+        #     self.select_map_window()
+
         # Show client which servers are on-line (get from Redis)
         self.servers_online = self.client.available_servers()
 
@@ -92,15 +95,15 @@ class GUI(object):
         self.game_l = Label(self.root, text="Choose a game")
         self.game_l.pack()
 
-        # Servers on-line list
+        # Available maps
         self.maps_list = Listbox(self.root, height=12)
         self.maps_list.pack()
         self.maps_list.bind('<<ListboxSelect>>', self.on_server_selection)
 
+
         # Join server button
         self.join_game_b = Button(self.root, text="Connect to selected map", command=self.on_connect_to_map)
         self.join_game_b.pack()
-
         self.create_new_game_b = Button(self.root, text="Create new map", command=self.create_new_game_window)
         self.create_new_game_b.pack()
 
@@ -109,18 +112,18 @@ class GUI(object):
 
         # TODO: Add here list of possible games on this
 
-        self.root.after(500, self.do_stuff)
-
+        # self.root.after(500, self.do_stuff)
         self.root.mainloop()
+
         # while True:
         #     self.root.update_idletasks()
         #     self.root.update()
 
-    def do_stuff(self, event=None):
-        if len(self.maps) == 0:
-            # Do recheck every 500 ms
-
-            self.root.after(500, self.do_stuff)
+    # def do_stuff(self, event=None):
+    #     if len(self.maps) == 0:
+    #         # Do recheck every 500 ms
+    #
+    #         self.root.after(500, self.do_stuff)
 
     def update_maps_list(self):
         '''
@@ -133,7 +136,7 @@ class GUI(object):
         for map_params in self.maps.values():
             print map_params["name"]
             # map_params["name"] + "\n"
-            # self.maps_list.insert(END, "76767")
+            self.maps_list.insert(END, "76767")
 
     def on_connect_to_map(self):
         if self.selected_map is None:
