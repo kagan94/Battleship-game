@@ -48,7 +48,8 @@ class Map(BaseModel):
 
     def __str__(self):
         return "Map_id:%s, server_name:%s, owner:%s, map_name:%s, rows:%s, columns:%s, game_started: %s"\
-               % (self.map_id, self.server.name, self.owner.nickname, self.name, self.rows, self.columns, self.game_started)
+               % (self.map_id, self.server.name, self.owner,
+                  self.name, self.rows, self.columns, self.game_started)
 
 
 class Player_to_map(BaseModel):

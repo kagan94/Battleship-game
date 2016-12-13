@@ -1,22 +1,11 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Setup Python logging --------------------------------------------------------
-import logging
-
-
-def start_logger():
-    FORMAT = '%(asctime)-15s %(levelname)s %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT)
-    LOG = logging.getLogger()
-    return LOG
-
-
 # Imports----------------------------------------------------------------------
 import pika  # for Msg Queue
 import uuid  # for generating unique correcaltion_id
 import ConfigParser as CP
-from threading import Thread
+from threading import Thread, Lock
 from argparse import ArgumentParser  # Parsing command line arguments
 from redis import ConnectionPool, Redis  # Redis middleware
 
@@ -28,6 +17,8 @@ from common import *
 current_path = os.path.abspath(os.path.dirname(__file__))
 config_file = os.path.join(current_path, "config.ini")
 
+lock = Lock()
+
 
 class Client(object):
     def __init__(self):
@@ -38,7 +29,11 @@ class Client(object):
         self.rabbitmq_channel = None
 
         self.temp_queue, temp_queue_name = None, ""
-        self.chosen_server_id = None
+
+        self.selected_server_id = None
+        self.selected_map_id = None
+
+        self.resp = None  # response is empty by default
 
     def open_rabbitmq_connection(self, host, login, password, virtual_host):
         #############
@@ -114,9 +109,6 @@ class Client(object):
 
             self.nickname = conf.get('USER_INFO', 'nickname')
 
-            # Run servers_online window
-            self.gui.choose_server_window()
-
         # Nickname wasn't found in local config
         else:
             # Create temp queue to collect the response from "register_nickname" operation
@@ -126,9 +118,6 @@ class Client(object):
 
             # Bind some triggers to queues
             self.rabbitmq_channel.basic_consume(self.on_response, queue=self.temp_queue_name)
-
-            # Launch GUI window to enter nickname (Ask player to enter his nickname)
-            self.gui.nickname_window()
 
     def register_nickname(self, nickname):
         '''
@@ -161,23 +150,24 @@ class Client(object):
         '''
 
         # Put query into MQ to register a new game
-        query = pack_query(COMMAND.CREATE_NEW_GAME, self.chosen_server_id, data=game_name)
+        query = pack_query(COMMAND.CREATE_NEW_GAME, self.selected_server_id, data=game_name)
         self.send_request(query)
 
-    def join_game(self, map_id):
+    def join_game(self):
         '''
         Register a new game on the server
 
-        :param map_id: (str) - map that player wants to connect
+        ###:param map_id: (str) - map that player wants to connect
         '''
+        map_id = self.selected_map_id
 
         # Put query into MQ to join existing game
-        query = pack_query(COMMAND.JOIN_EXISTING_GAME, self.chosen_server_id, map_id)
+        query = pack_query(COMMAND.JOIN_EXISTING_GAME, self.selected_server_id, map_id)
         self.send_request(query)
 
     def place_ships(self, map_id):
         ''' Place ships randomly '''
-        query = pack_query(COMMAND.PLACE_SHIPS, self.chosen_server_id, data=map_id)
+        query = pack_query(COMMAND.PLACE_SHIPS, self.selected_server_id, data=map_id)
         self.send_request(query)
 
     def register_hit(self, map_id, target_row, target_column):
@@ -190,7 +180,7 @@ class Client(object):
         '''
 
         data = pack_data([map_id, target_row, target_column])
-        query = pack_query(COMMAND.MAKE_HIT, self.chosen_server_id, data)
+        query = pack_query(COMMAND.MAKE_HIT, self.selected_server_id, data)
 
         # Put query to register a new hit
         self.send_request(query)
@@ -216,8 +206,7 @@ class Client(object):
 
         :return: (list) of maps
         '''
-
-        query = pack_query(COMMAND.LIST_OF_MAPS, self.chosen_server_id)
+        query = pack_query(COMMAND.LIST_OF_MAPS, self.selected_server_id)
 
         # Put query to register a new hit
         self.send_request(query)
@@ -267,22 +256,27 @@ class Client(object):
                 self.gui.check_nick_button.config(state=NORMAL)
                 print "Register nickname error: %s" % error_code_to_string(resp_code)
 
+        # +
         elif command == COMMAND.LIST_OF_MAPS:
             maps_data = parse_data(data)
             self.gui.maps = {}
 
-            # Decompress maps (map_id, map_name, rows, columns) to dict[map_id] = [params]
-            for i in range(0, len(maps_data), 4):
-                map_id = maps_data[i]
-                map_name, rows, columns = maps_data[i + 1], maps_data[i + 2], maps_data[i + 3]
+            if len(maps_data) == 1 and maps_data[0] == "":
+                print "No available maps online"
 
-                self.gui.maps[map_id] = {
-                    "name": map_name,
-                    "size": [rows, columns]
-                }
+            else:
+                with lock:
+                    # Decompress maps (map_id, map_name, rows, columns) to dict[map_id] = [params]
+                    for i in range(0, len(maps_data), 4):
+                        map_id = maps_data[i]
+                        map_name, rows, columns = maps_data[i + 1], maps_data[i + 2], maps_data[i + 3]
 
-            # Trigger GUI to update maps list
-            self.gui.update_maps_list()
+                        self.gui.maps[map_id] = {
+                            "name": map_name,
+                            "size": [rows, columns]
+                        }
+
+                    self.gui.update_maps_list()
 
         # +
         elif command == COMMAND.CREATE_NEW_GAME:
@@ -298,11 +292,24 @@ class Client(object):
         # +
         elif command == COMMAND.JOIN_EXISTING_GAME:
             if resp_code == RESP.OK:
-                pass
-                # TODO: Update GUI, open the field with existing game
+                print self.gui.selected_map_size
+                print self.gui.selected_map_id
+
+                with lock:
+                    self.resp = True
+
+                print "Command draw field"
+
+                self.gui.draw_field()
+
             else:
-                # TODO: Update notification area - show errors
-                pass
+                error = "Command: %s \n" % command_to_str(command)
+                error += error_code_to_string(resp_code)
+
+                with lock:
+                    # Show window with error msg + unblock buttons
+                    self.gui.unfreeze_join_game_buttons()
+                    self.gui.show_popup(error)
 
         # +
         elif command == COMMAND.PLACE_SHIPS:
@@ -388,7 +395,8 @@ class Client(object):
     #############
     def notifications_loop(self, host, login, password, virtual_host):
         ''' Open new RabbitMQ connection to receive notifications '''
-        try:
+        # try:
+        if 1:
             print "- Start establishing connection to RabbitMQ server."
 
             credentials = pika.PlainCredentials(login, password)
@@ -405,14 +413,14 @@ class Client(object):
             channel.queue_declare(queue=resp_queue, durable=True)
             channel.basic_consume(self.on_response, queue=resp_queue)
 
+            # Main loop to receive msgs
             channel.start_consuming()
 
             # Close MQ connection if still opened
             if not connection.is_closed:
                 connection.close()
-
-        except:
-            print "ERROR (in notif. loop): Can't access RabbitMQ server, please check connection parameters."
+        # except:
+        #     print "ERROR (in notif. loop): Can't access RabbitMQ server, please check connection parameters."
 
 
 def main():
@@ -420,14 +428,14 @@ def main():
     parser = ArgumentParser()
 
     # Args for RabbitMQ
-    parser.add_argument('-rmqh','--rabbitmq_host',
+    parser.add_argument('-rmqh', '--rabbitmq_host',
                         help='Host for RabbitMQ connection, default is %s' % RABBITMQ_HOST,
                         default=RABBITMQ_HOST)
-    parser.add_argument('-rmqcr','--rabbitmq_credentials',
+    parser.add_argument('-rmqcr', '--rabbitmq_credentials',
                         help='Credentials for RabbitMQ connection in format "login:password",'
                              'default is %s' % RABBITMQ_CREDENTIALS,
                         default=RABBITMQ_CREDENTIALS)
-    parser.add_argument('-rmqvh','--rabbitmq_virtual_host',
+    parser.add_argument('-rmqvh', '--rabbitmq_virtual_host',
                         help='Virtual host for RabbitMQ connection, default is "%s"' % RABBITMQ_VIRTUAL_HOST,
                         default=RABBITMQ_VIRTUAL_HOST)
 
@@ -445,7 +453,6 @@ def main():
     client = Client()
     gui = GUI()
 
-
     # Client can trigger GUI and vice-versa (at anytime)
     client.gui = gui
     gui.client = client
@@ -461,6 +468,16 @@ def main():
     if client.rabbitmq_connection and client.redis_conn:
         print "####################"
 
+        # Start notification loop
+        notifications_thread = Thread(name='NotificationsThread',
+                                      target=client.notifications_loop,
+                                      args=(args.rabbitmq_host,
+                                            login, password,
+                                            args.rabbitmq_virtual_host,))
+        notifications_thread.setDaemon(True)
+        notifications_thread.start()
+
+        # Init check name
         client.check_nickname()
 
         # TODO: In GUI. Add list of available servers which player can choose
@@ -474,20 +491,16 @@ def main():
             request_queue = 'req_' + client.nickname
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)
 
+            # Run servers_online window
+            gui.choose_server_window()
+
             # client.create_new_game("abc game")
             # client.register_hit(map_id='74', target_row='2', target_column='2')
             # client.join_game(map_id='74')
             # client.place_ships(map_id='74')
-
-            # Start notification loop
-            notifications_thread = Thread(name='NotificationsThread',
-                                          target=client.notifications_loop,
-                                          args=(args.rabbitmq_host, login, password, args.rabbitmq_virtual_host,))
-            notifications_thread.start()
-
-            # Blocks until the thread finished the work.
-            notifications_thread.join()
-
+        else:
+            # Launch GUI window to enter nickname (Ask player to enter his nickname)
+            gui.nickname_window()
 
     # Create 2 separate threads for asynchronous notifications and for main app
     # main_app_thread = Thread(name='MainApplicationThread', target=client.main_app_loop)

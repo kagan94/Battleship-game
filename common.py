@@ -68,7 +68,7 @@ RESP = enum(
     MAP_NAME_ALREADY_EXISTS='4',
     MAP_DOES_NOT_EXIST='5',
     GAME_ALREADY_STARTED='6',
-    ALREADY_JOINED_TO_MAP='7',
+    # ALREADY_JOINED_TO_MAP='7',
 
     LACK_OF_PLACE_FOR_SHIPS='8'
 )
@@ -98,8 +98,8 @@ def error_code_to_string(err_code):
         err_text = "Given map doesn't exist"
     elif err_code == RESP.GAME_ALREADY_STARTED:
         err_text = "Game already started"
-    elif err_code == RESP.ALREADY_JOINED_TO_MAP:
-        err_text = "You already joined to requested map"
+    # elif err_code == RESP.ALREADY_JOINED_TO_MAP:
+    #     err_text = "You already joined to requested map"
     elif err_code == RESP.LACK_OF_PLACE_FOR_SHIPS:
         err_text = "There's no place to locate all ships"
     return err_text

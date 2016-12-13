@@ -335,26 +335,31 @@ class Main_Server(object):
         # Game session already started on requested map
         elif Map.select().where(Map.map_id == map_id,
                                 Map.server == self.server_id,
-                                Map.game_started == 1) > 0:
+                                Map.game_started == 1).count() > 0:
             resp_code = RESP.GAME_ALREADY_STARTED
 
         # Player already joined this map
         elif Player_to_map.select().where(Player_to_map.map == map_id,
-                                          Player_to_map.player == player_id) > 0:
-            resp_code = RESP.ALREADY_JOINED_TO_MAP
+                                          Player_to_map.player == player_id).count() > 0:
+            resp_code = RESP.OK
+            # resp_code = RESP.ALREADY_JOINED_TO_MAP
 
         # Add player to the requested map
         else:
             Player_to_map.create(map_id=map_id, player=player_id)
 
-            map_creator = Map.select().where(Map.map_id == map_id,
-                                             Map.server == self.server_id)
+            try:
+                map_creator = Map.select().where(Map.map_id == map_id,
+                                                 Map.server == self.server_id).get()
 
-            # Check that current player and creator of the map are different players
-            if map_creator.owner != player_id:
-                # Notify admin about joining a new player
-                query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME, RESP.OK, player_nickname)
-                self.send_response(map_creator.owner.nickname, query)
+                # Check that current player and creator of the map are different players
+                if map_creator.owner.player_id != player_id:
+                    # Notify admin about joining a new player
+                    query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME, RESP.OK, player_nickname)
+                    self.send_response(map_creator.owner.nickname, query)
+
+            except Map.DoesNotExist:
+                pass
 
         return resp_code
 
@@ -418,10 +423,12 @@ class Main_Server(object):
 
         print ">> Received command: %s, data: %s" % (command_to_str(command), data)
 
+        # +
         if command == COMMAND.LIST_OF_MAPS:
             resp_code, data = self.list_of_maps()
             query = pack_resp(command, resp_code, self.server_id, data)
 
+        # +
         elif command == COMMAND.CREATE_NEW_GAME:
             resp_code, map_id = self.create_new_map(owner_id=player_id, name=data,
                                                     rows='5', columns='5')
