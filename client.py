@@ -13,11 +13,11 @@ from redis import ConnectionPool, Redis  # Redis middleware
 from gui import *
 from common import *
 
+lock = Lock()
+
 # Path to the config file
 current_path = os.path.abspath(os.path.dirname(__file__))
 config_file = os.path.join(current_path, "config.ini")
-
-lock = Lock()
 
 
 class Client(object):
@@ -31,7 +31,6 @@ class Client(object):
         self.temp_queue, temp_queue_name = None, ""
 
         self.selected_server_id = None
-        self.selected_map_id = None
 
         self.resp = None  # response is empty by default
 
@@ -94,6 +93,22 @@ class Client(object):
                                             routing_key=request_queue,
                                             body=query)
 
+    def save_nickname_locally(self, nickname):
+        ''' Save nickname in local config file '''
+        self.nickname = nickname
+
+        # Save nickname in local config
+        conf = CP.RawConfigParser()
+        conf.add_section("USER_INFO")
+        conf.set('USER_INFO', 'nickname', self.nickname)
+
+        with open(config_file, 'w') as cf:
+            conf.write(cf)
+
+        # Delete temporary queue if exists
+        if self.temp_queue:
+            self.rabbitmq_channel.queue_delete(queue=self.temp_queue_name)
+
     # Main methods for GUI ============================================================
     def check_nickname(self):
         '''
@@ -117,8 +132,11 @@ class Client(object):
                 self.temp_queue_name = self.temp_queue.method.queue
 
             # Bind some triggers to queues
-            self.rabbitmq_channel.basic_consume(self.on_response, queue=self.temp_queue_name)
+            self.rabbitmq_channel.basic_consume(self.on_register_nickname_response, queue=self.temp_queue_name)
 
+    ###########
+    # Example of RPC pattern
+    ###########
     def register_nickname(self, nickname):
         '''
         Register the nickname provided by player
@@ -137,12 +155,30 @@ class Client(object):
                                                 reply_to=self.temp_queue_name,
                                                 delivery_mode=2
                                             ))
-
         print "Try to register nickname"
-        while self.nickname is None:
+
+        while self.resp is None:
             self.rabbitmq_connection.process_data_events()
 
-    def create_new_game(self, game_name):
+        self.resp = None
+
+    def on_register_nickname_response(self, channel, method, props, body):
+        self.resp = True
+        _, resp_code, _, nickname = parse_response(body)
+
+        if resp_code == RESP.OK:
+            self.gui.add_notification("Nickname was registered successfully")
+
+            self.save_nickname_locally(nickname)
+            self.gui.choose_server_window()
+        else:
+            # Unfreeze blocked submit button in GUI
+            self.gui.check_nick_button.config(state=NORMAL)
+
+            error_msg = error_code_to_string(resp_code)
+            self.gui.add_notification(error_msg)
+
+    def create_new_game(self, game_name, field_size):
         '''
         Register a new game on the server
 
@@ -150,7 +186,8 @@ class Client(object):
         '''
 
         # Put query into MQ to register a new game
-        query = pack_query(COMMAND.CREATE_NEW_GAME, self.selected_server_id, data=game_name)
+        data = pack_data([game_name, str(field_size)])
+        query = pack_query(COMMAND.CREATE_NEW_GAME, self.selected_server_id, data)
         self.send_request(query)
 
     def join_game(self):
@@ -159,18 +196,18 @@ class Client(object):
 
         ###:param map_id: (str) - map that player wants to connect
         '''
-        map_id = self.selected_map_id
+        map_id = self.gui.selected_map_id
 
         # Put query into MQ to join existing game
         query = pack_query(COMMAND.JOIN_EXISTING_GAME, self.selected_server_id, map_id)
         self.send_request(query)
 
-    def place_ships(self, map_id):
+    def place_ships(self):
         ''' Place ships randomly '''
-        query = pack_query(COMMAND.PLACE_SHIPS, self.selected_server_id, data=map_id)
+        query = pack_query(COMMAND.PLACE_SHIPS, self.selected_server_id, data=self.gui.selected_map_id)
         self.send_request(query)
 
-    def register_hit(self, map_id, target_row, target_column):
+    def make_shot(self, target_row, target_column):
         '''
         Register a new hit on the map
 
@@ -179,7 +216,7 @@ class Client(object):
         :param target_column: (str)
         '''
 
-        data = pack_data([map_id, target_row, target_column])
+        data = pack_data([self.gui.selected_map_id, target_row, target_column])
         query = pack_query(COMMAND.MAKE_HIT, self.selected_server_id, data)
 
         # Put query to register a new hit
@@ -211,181 +248,19 @@ class Client(object):
         # Put query to register a new hit
         self.send_request(query)
 
+    def spectator_mode(self):
+        # Request to server to go into spectator mode
+        query = pack_query(COMMAND.SPECTATOR_MODE, self.selected_server_id, self.gui.selected_map_id)
+        self.send_request(query)
+
     # Handlers ========================================================================
     def on_response(self, channel, method, props, body):
-        # if props.correlation_id in self.corr_ids.keys():
 
-        # Delete received response on requested command
-        # command = self.corr_ids[props.correlation_id]
-        # del self.corr_ids[props.correlation_id]
-
-        # print body
-        command, resp_code, server_id, data = parse_response(body)
-
-        # print command, resp_code, server_id, data
-
-        print ">> Received resp(%s) on command: %s, server(%s)"\
-              % (error_code_to_string(resp_code), command_to_str(command), server_id)
-
-        # +
-        if command == COMMAND.REGISTER_NICKNAME:
-            ''' Handler to receive response on request reg_me '''
-            command, resp_code, server_id, data = parse_response(body)
-
-            if resp_code == RESP.OK:
-                print "Nickname was registered successfully"
-
-                self.nickname = data
-
-                # Save nickname in local config
-                conf = CP.RawConfigParser()
-                conf.add_section("USER_INFO")
-                conf.set('USER_INFO', 'nickname', self.nickname)
-
-                with open(config_file, 'w') as cf:
-                    conf.write(cf)
-
-                # Delete temporary queue if exists
-                if self.temp_queue:
-                    self.rabbitmq_channel.queue_delete(queue=self.temp_queue_name)
-
-                self.gui.choose_server_window()
-
-            else:
-                # Unfreeze blocked submit button in GUI
-                self.gui.check_nick_button.config(state=NORMAL)
-                print "Register nickname error: %s" % error_code_to_string(resp_code)
-
-        # +
-        elif command == COMMAND.LIST_OF_MAPS:
-            maps_data = parse_data(data)
-            self.gui.maps = {}
-
-            if len(maps_data) == 1 and maps_data[0] == "":
-                print "No available maps online"
-
-            else:
-                with lock:
-                    # Decompress maps (map_id, map_name, rows, columns) to dict[map_id] = [params]
-                    for i in range(0, len(maps_data), 4):
-                        map_id = maps_data[i]
-                        map_name, rows, columns = maps_data[i + 1], maps_data[i + 2], maps_data[i + 3]
-
-                        self.gui.maps[map_id] = {
-                            "name": map_name,
-                            "size": [rows, columns]
-                        }
-
-                    self.gui.update_maps_list()
-
-        # +
-        elif command == COMMAND.CREATE_NEW_GAME:
-            map_id = data
-
-            if resp_code == RESP.OK:
-                pass
-                # TODO: Update GUI, open new field
-            else:
-                pass
-                # TODO: Update notification area
-
-        # +
-        elif command == COMMAND.JOIN_EXISTING_GAME:
-            if resp_code == RESP.OK:
-                print self.gui.selected_map_size
-                print self.gui.selected_map_id
-
-                with lock:
-                    self.resp = True
-
-                print "Command draw field"
-
-                self.gui.draw_field()
-
-            else:
-                error = "Command: %s \n" % command_to_str(command)
-                error += error_code_to_string(resp_code)
-
-                with lock:
-                    # Show window with error msg + unblock buttons
-                    self.gui.unfreeze_join_game_buttons()
-                    self.gui.show_popup(error)
-
-        # +
-        elif command == COMMAND.PLACE_SHIPS:
-            if resp_code == RESP.OK:
-                info = parse_data(data)
-                ships_locations = []
-
-                # Parse (x1, x2, y1, y2, and ship size) as tuple
-                for i in range(0, len(info), 5):
-                    ship = (info[i], info[i + 1], info[i + 2], info[i + 3], info[i + 4])
-                    ships_locations.append(ship)
-
-                # ships_locations = [(x1, x2, y1, y2, ship_size), ...]
-                print ships_locations
-
-            else:
-                print error_code_to_string(resp_code)
-                # TODO: Update notification area
-
-        # +
-        elif command == COMMAND.MAKE_HIT:
-            if resp_code == RESP.OK:
-                hit, is_game_end = parse_data(data)
-
-                # TODO: Update GUI. Add hit to the map.
-                # TODO: If game end, then block field + update notification area
-
-                # TODO: Check whether ship is completely sank
-            else:
-                pass
-                # TODO: Update notification
-
-        elif command == COMMAND.DISCONNECT_FROM_GAME:
-            pass
-
-        elif command == COMMAND.QUIT_FROM_GAME:
-            pass
-
-        elif command == COMMAND.START_GAME:
-            pass
-
-        elif command == COMMAND.RESTART_GAME:
-            pass
-
-        elif command == COMMAND.KICK_PLAYER:
-            pass
-
-        # NOTIFICATIONS FROM SERVER
-        # 1) If I'm owner of the map and another player joined
-        # 2) Another player damaged my ship
-        # 3) My ship sank
-        # 4) My turn to move
-        # 5) You're kicked
-        # 6) Another player damaged another player's ship
-
-        # +
-        elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
-            joined_player = data  # nickname
-            # (!) Don't need to check resp_code
-
-            # TODO: GUI update status bar about joined player
-
-        elif command == COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED:
-
-            # TODO: Check whether ship is completely sank
-            pass
-
-        elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
-            pass
-
-        elif command == COMMAND.NOTIFICATION.YOU_ARE_KICKED:
-            pass
-
-        # ????? Do we really need it????????????????????????????????????
-        elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
-            pass
+        print body
+        # Put the task from the server into the queue (GUI should process it
+        # It needs to avoid blocking some methods, because this function is running in thread
+        with lock:
+            self.gui.tasks.put(body)
 
         # Remove read msg rom queue
         channel.basic_ack(delivery_tag=method.delivery_tag)
@@ -407,8 +282,12 @@ class Client(object):
             channel = connection.channel()
             print "- Connection to RabbitMQ server is established."
 
+            while self.nickname is None:
+                time.sleep(0.2)
             # Bind trigger to response queue
             resp_queue = "resp_" + self.nickname
+
+            print "Created queue for responses"
 
             channel.queue_declare(queue=resp_queue, durable=True)
             channel.basic_consume(self.on_response, queue=resp_queue)
@@ -468,15 +347,6 @@ def main():
     if client.rabbitmq_connection and client.redis_conn:
         print "####################"
 
-        # Start notification loop
-        notifications_thread = Thread(name='NotificationsThread',
-                                      target=client.notifications_loop,
-                                      args=(args.rabbitmq_host,
-                                            login, password,
-                                            args.rabbitmq_virtual_host,))
-        notifications_thread.setDaemon(True)
-        notifications_thread.start()
-
         # Init check name
         client.check_nickname()
 
@@ -492,15 +362,36 @@ def main():
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)
 
             # Run servers_online window
-            gui.choose_server_window()
+            # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
+            # gui.choose_server_window()
+
+            client.selected_server_id = 2
+            client.my_player_id = 48
+            gui.selected_map_id = 83
+            gui.field_size = 20
+
+            client.join_game()
+
+            # gui.run_game()
 
             # client.create_new_game("abc game")
-            # client.register_hit(map_id='74', target_row='2', target_column='2')
+            # client.make_shot(map_id='74', target_row='2', target_column='2')
             # client.join_game(map_id='74')
             # client.place_ships(map_id='74')
         else:
             # Launch GUI window to enter nickname (Ask player to enter his nickname)
             gui.nickname_window()
+
+        # Start notification loop
+        notifications_thread = Thread(name='NotificationsThread',
+                                      target=client.notifications_loop,
+                                      args=(args.rabbitmq_host,
+                                            login, password,
+                                            args.rabbitmq_virtual_host,))
+        notifications_thread.setDaemon(True)
+        notifications_thread.start()
+
+        gui.notification_window()
 
     # Create 2 separate threads for asynchronous notifications and for main app
     # main_app_thread = Thread(name='MainApplicationThread', target=client.main_app_loop)

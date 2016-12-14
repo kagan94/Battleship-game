@@ -42,14 +42,13 @@ class Map(BaseModel):
     server = ForeignKeyField(Server)
     owner = ForeignKeyField(Player)
     name = CharField()
-    rows = IntegerField()
-    columns = IntegerField()
+    size = IntegerField()
     game_started = IntegerField()
 
     def __str__(self):
-        return "Map_id:%s, server_name:%s, owner:%s, map_name:%s, rows:%s, columns:%s, game_started: %s"\
+        return "Map_id:%s, server_name:%s, owner:%s, map_name:%s, size:%s, game_started: %s"\
                % (self.map_id, self.server.name, self.owner,
-                  self.name, self.rows, self.columns, self.game_started)
+                  self.name, self.size, self.game_started)
 
 
 class Player_to_map(BaseModel):

@@ -81,6 +81,8 @@ class Main_Server(object):
         self.server_name = server_name
         self.server_id = None
 
+        self.my_player_id = None
+
     def server_online(self):
         '''
             Put msg into queue "servers_online" to notify about server presence
@@ -250,7 +252,13 @@ class Main_Server(object):
         return resp_code
 
     @refresh_db_connection
-    def make_hit(self, map_id, player_id, row, column):
+    def notify_about_ship_damage(self, map_id, initiator_id, target_player_id, target_row, target_column):
+        ''' Send notification to damaged player '''
+        self.send()
+
+
+    @refresh_db_connection
+    def make_hit(self, map_id, player_id, target_row, target_column):
         '''
         :param map_id: (str)
         :param player_id: (int)
@@ -268,16 +276,41 @@ class Main_Server(object):
 
         # Player already made shot in this region
         elif Player_hits.select().where(Player_hits.map == map_id,
-                                        Player_hits.player == player_id,
-                                        Player_hits.row == row,
-                                        Player_hits.column == column).count() > 0:
+                                        Player_hits.row == target_row,
+                                        Player_hits.column == target_column).count() > 0:
             resp_code = RESP.SHOT_WAS_ALREADY_MADE_HERE
 
         # Register new shot
         else:
             hit = "1"
 
-            Player_hits.create(map=map_id, player=player_id, row=row, column=column, hit=hit)
+            # Register hit in DB
+            Player_hits.create(map=map_id, player=player_id, row=target_row, column=target_column, hit=hit)
+
+            # Check whether hit was successful or not
+            hit_query = Ship_to_map.select().where(Ship_to_map.player != player_id,
+                                                   Ship_to_map.map == map_id,
+                                                   # Check by row
+                                                   Ship_to_map.row_start <= target_row,
+                                                   Ship_to_map.row_end >= target_row,
+                                                   # And by column
+                                                   Ship_to_map.column_start <= target_column,
+                                                   Ship_to_map.column_end >= target_column)
+            try:
+                record = hit_query.get()
+                hit = "1"
+
+                # Query to notify player whose ship was damaged
+                self.notify_about_ship_damage(map_id,
+                                              initiator_id=player_id,
+                                              target_player_id=record.player,
+                                              target_row=target_row,
+                                              target_column=target_column)
+                # TODO: Notify about next move
+
+            # Nobody was damaged
+            except Ship_to_map.DoesNotExist:
+                pass
 
             # TODO: add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
 
@@ -289,17 +322,16 @@ class Main_Server(object):
             # TODO: if ship sank, send notification to damaged player
             # TODO: notify next player if hit = 0
 
-        return resp_code, hit, is_game_end
+        return resp_code, row, column, hit, is_game_end
 
     @refresh_db_connection
-    def create_new_map(self, owner_id, name, rows, columns):
+    def create_new_map(self, owner_id, name, size):
         '''
         Create a new map with size of (rows x columns)
 
         :param owner_id: (int)
         :param name: (str) = map name
-        :param rows: (str)
-        :param columns: (str)
+        :param size: (str)
         :return: (enum) = response code, (str) map_id
         '''
         resp_code, map_id = RESP.OK, ""
@@ -307,8 +339,8 @@ class Main_Server(object):
         # Check that map with the same name doesn't exist in DB
         if Map.select().where(Map.name == name,
                               Map.server == self.server_id).count() == 0:
-            # Create a new map
-            Map.create(owner=owner_id, server=self.server_id, name=name, rows=rows, columns=columns)
+            # Create new map
+            Map.create(owner=owner_id, server=self.server_id, name=name, size=size)
             map_id = Map.select().order_by(Map.map_id.desc()).get().map_id
 
         else:
@@ -377,12 +409,34 @@ class Main_Server(object):
 
         for m in maps_query:
             # Compress data
-            map_data = (m.map_id, m.name, m.rows, m.columns)
+            map_data = (m.map_id, m.name, m.size)
             for el in zip(map_data):
                 maps_data.append(str(el[0]))
 
         data = pack_data(maps_data)
         return RESP.OK, data
+
+    @refresh_db_connection
+    def spectator_mode(self, player_id, map_id):
+        ''' Fetch all ships locations and send them to user in spectator mode '''
+        resp_code = RESP.OK
+
+        all_ships = []
+        all_ships_query = Ship_to_map.select().where(Ship_to_map.map == map_id)
+
+        for ship in all_ships_query:
+            x1, x2 = ship.row_start, ship.row_end
+            y1, y2 = ship.column_start, ship.column_end
+
+            ship_coord = (ship.player_id, x1, x2, y1, y2, ship.ship_type)
+
+            # Compress data
+            for el in zip(ship_coord):
+                all_ships.append(str(el[0]))
+
+        data = pack_data(all_ships)
+        return resp_code, data
+
 
     ###################
     # Handlers for queue ===================================================================================
@@ -393,7 +447,7 @@ class Main_Server(object):
         command, server_id, nickname = parse_query(body)
 
         resp_code = self.register_nickname(nickname)
-        response = pack_resp(COMMAND.REGISTER_NICKNAME, resp_code, data=nickname)
+        response = pack_resp(COMMAND.REGISTER_NICKNAME, resp_code, self.server_id, data=nickname)
 
         print "Resp_code: %s" % resp_code
 
@@ -428,10 +482,16 @@ class Main_Server(object):
             resp_code, data = self.list_of_maps()
             query = pack_resp(command, resp_code, self.server_id, data)
 
+            # Additional notification to send player_id
+            additional_query = pack_resp(
+                COMMAND.NOTIFICATION.SAVE_PLAYER_ID, RESP.OK, self.server_id, player_id)
+            self.send_response(nickname=nickname, query=additional_query)
+
         # +
         elif command == COMMAND.CREATE_NEW_GAME:
-            resp_code, map_id = self.create_new_map(owner_id=player_id, name=data,
-                                                    rows='5', columns='5')
+            game_name, field_size = parse_data(data)
+
+            resp_code, map_id = self.create_new_map(owner_id=player_id, name=game_name, size=field_size)
             query = pack_resp(command, resp_code, self.server_id, data=map_id)
 
         # +
@@ -448,9 +508,11 @@ class Main_Server(object):
         elif command == COMMAND.MAKE_HIT:
             map_id, row, column = parse_data(data)
 
-            resp_code, hit, is_game_end = self.make_hit(map_id, player_id, row, column)
-            data = pack_data([hit, is_game_end])
+            # target_row, target_column, hit_successful
+            resp_code, row, column, hit, is_game_end = self.make_hit(map_id, player_id, row, column)
 
+            # data = pack_data([hit, is_game_end])
+            data = pack_data([hit, is_game_end])
             query = pack_resp(command, resp_code, self.server_id, data)
 
         elif command == COMMAND.DISCONNECT_FROM_GAME:
@@ -467,6 +529,12 @@ class Main_Server(object):
 
         elif command == COMMAND.KICK_PLAYER:
             pass
+
+        elif command == COMMAND.SPECTATOR_MODE:
+            # Spectator mode. Player can see all ships
+            # But he can't take part in the game
+            resp_code, data = self.spectator_mode(player_id, map_id=data)
+            query = pack_resp(command, resp_code, self.server_id, data)
 
         # Put response into the queue
         if query:

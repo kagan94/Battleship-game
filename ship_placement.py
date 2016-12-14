@@ -26,7 +26,8 @@ def place_ships(map_id, player_id):
     # print map_id
     game_map = Map.get(Map.map_id == map_id)
     # print MAP_DOES_NOT_EXIST
-    rows, columns = game_map.rows, game_map.columns  # equal to n, m
+
+    rows, columns = game_map.size, game_map.size  # equal to n, m
 
     # Player already placed his ships
     if Ship_to_map.select().where(Ship_to_map.map == map_id, Ship_to_map.player == player_id).count():

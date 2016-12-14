@@ -24,6 +24,10 @@ SEP_DATA = ":"
 def enum(**vals):
     return type('Enum', (), vals)
 
+GAME_COMMAND = enum(
+    PLACE_SHIPS = '1',
+
+)
 
 COMMAND = enum(
     REGISTER_NICKNAME='1',
@@ -43,6 +47,9 @@ COMMAND = enum(
     RESTART_GAME='10',  # when the game ended
 
     KICK_PLAYER='11',
+
+    SPECTATOR_MODE='12',
+
     # INVITE_PLAYERS='10',
 
     # Notifications from the server
@@ -52,8 +59,9 @@ COMMAND = enum(
         # YOUR_SHIP_SANK='23',
         SOMEONES_SHIP_SANK='24',
         YOUR_TURN_TO_MOVE='25',
-        YOU_ARE_KICKED='26'
+        YOU_ARE_KICKED='26',
 
+        SAVE_PLAYER_ID='27'
         # SERVER_ONLINE='27'
     )
 )
@@ -138,6 +146,8 @@ def command_to_str(command):
         text = "Restart the game"
     elif command == COMMAND.KICK_PLAYER:
         text = "Kick player"
+    elif command == COMMAND.SPECTATOR_MODE:
+        text = "Spectator mode"
     # elif command == COMMAND.INVI
 
 
@@ -154,6 +164,9 @@ def command_to_str(command):
         text = "Notif. My turn to move"
     elif command == COMMAND.NOTIFICATION.YOU_ARE_KICKED:
         text = "Notif. You're kicked from the map"
+
+    elif command == COMMAND.NOTIFICATION.SAVE_PLAYER_ID:
+        text = "Notif. Save your player_id"
     # elif command == COMMAND.NOTIFICASERVER_ONLINE
 
     return text
@@ -165,7 +178,7 @@ def pack_query(command, server_id="", data=""):
     :param server_id: (str) server_id that should process request
     :return: packed elements from the list separated by separator
     '''
-    return SEP.join([command, server_id, data])
+    return SEP.join([command, str(server_id), str(data)])
 
 
 def pack_resp(command, resp_code, server_id="", data=""):
