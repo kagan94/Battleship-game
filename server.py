@@ -297,15 +297,19 @@ class Main_Server(object):
         ''' Player made a shot, then notify other players about this shot (except player_id) '''
 
         # Get all players on this map (except initiator and disconnected users)
-        players_query = Player_to_map.select().where(Player_to_map.map == map_id,
+        players_on_map_query = Player_to_map.select().where(Player_to_map.map == map_id,
                                                      Player_to_map.player != initiator_id,
                                                      Player_to_map.disconnected == 0)
 
+        print "SOMEONE_MADE_SHOT", players_on_map_query.count()
+
         # Send notification about this move
-        for record in players_query:
+        for record in players_on_map_query:
+
             data = pack_data([map_id, initiator_id, row, column])
             query = pack_resp(COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT, RESP.OK, self.server_id, data)
 
+            print record.player.nickname
             # Put notification into the queue
             self.send_response(nickname=record.player.nickname, query=query)
 

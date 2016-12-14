@@ -32,24 +32,21 @@
 * add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in make_hit function) (server)
 * if ship sank, send notification to him
 * list of maps done
+* notify next player if hit = 0
+* form to create a new field + size of field (GUI)
+* create random ships locations on the map (GUI)
+* show the map of ships location for player (GUI)
+* spectator mode (GUI)
+* remove double-click (as triger) on the same coordinate on the field that user can click only once on one coordinate (GUI)
+* Remove glitch with window freezeing while waiting for the response (Maybe through using separate Thread for GUI) (GUI)
 
 ## TODO Server:
-* notify next player if hit = 0
 * kick player
 * change admin after timeout
-
 
 ## TODO Client:
 * Add "KeyboardInterrupt, SystemExit" after connecting GUI
 
-
 ## TODO GUI:
-* form to create a new field + size of field
-* create random ships locations on the map
-* show the map of ships location for player
-* spectator mode
-* remove double-click (as triger) on the same coordinate on the field that user can click only once on one coordinate
-* Remove glitch with window freezeing while waiting for the response (Maybe through using separate Thread for GUI)
-
 
 ![SQL db scatch](http://clip2net.com/clip/m527982/98592-clip-43kb.png)

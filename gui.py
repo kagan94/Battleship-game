@@ -427,8 +427,8 @@ class GUI(object):
         pygame.init()
 
         # Set the HEIGHT and WIDTH of the screen
-        self.WINDOW_SIZE = [(WIDTH + MARGIN) * self.size + MARGIN,
-                            (WIDTH + MARGIN) * self.size + MARGIN]
+        self.max_size = (WIDTH + MARGIN) * self.size + MARGIN
+        self.WINDOW_SIZE = [self.max_size, self.max_size]
         self.screen = pygame.display.set_mode(self.WINDOW_SIZE)
 
         # Set title of screen
@@ -440,18 +440,31 @@ class GUI(object):
         # Used to manage how fast the screen updates
         clock = pygame.time.Clock()
 
-        def draw_dash(row, column):
-            x1 = (MARGIN + WIDTH) * row
-            x2 = (MARGIN + WIDTH) * row + MARGIN + WIDTH
-            y1 = y2 = (MARGIN + HEIGHT) * column + MARGIN + (HEIGHT / 2)
+        def draw_dash(i, j):
+            # print i, j
+            # x1, x2 = 20, 20 + MARGIN + WIDTH
+            # y1, y2 = 120, 120
+            # i, j = 19, 19
 
+            x1 = (MARGIN + WIDTH) * j
+            x2 = (MARGIN + WIDTH) * j + MARGIN + WIDTH
+            y1 = y2 = (MARGIN + HEIGHT) * i - ((MARGIN + HEIGHT) / 2)
+
+            # if y2 > self.maxx:
+            #     self.maxx = y2
+            #     print x1, x2, "_____"
+
+            # x1, x2, y2 = 0, 14, 275
+            y1 = y2
+
+            # print x1, x2, y2, MARGIN + WIDTH, y2 >= self.max_size, x1 >= self.max_size, x2 >= self.max_size,
             pygame.draw.line(self.screen, BLACK, (x1, y1), (x2, y2), 3)
 
-        def draw_cross(row, column):
-            x1 = (MARGIN + WIDTH) * row
-            x2 = (MARGIN + WIDTH) * row + MARGIN + WIDTH
-            y1 = (MARGIN + HEIGHT) * column
-            y2 = (MARGIN + HEIGHT) * column + MARGIN + HEIGHT
+        def draw_cross(i, j):
+            x1 = (MARGIN + WIDTH) * i
+            x2 = (MARGIN + WIDTH) * i + MARGIN + WIDTH
+            y1 = (MARGIN + HEIGHT) * j
+            y2 = (MARGIN + HEIGHT) * j + MARGIN + HEIGHT
 
             pygame.draw.line(self.screen, BLACK, (x1, y1), (x2, y2), 3)
             pygame.draw.line(self.screen, BLACK, (x2, y1), (x1, y2), 3)
@@ -487,54 +500,54 @@ class GUI(object):
             # Set the screen background
             self.screen.fill(BLACK)
 
-            try:
-                # Draw the grid
-                for row in range(self.size):
-                    for column in range(self.size):
-                        color = WHITE
+            # try:
+            # Draw the grid
+            for row in range(self.size):
+                for column in range(self.size):
+                    color = WHITE
 
-                        key = self.grid[row][column]
+                    key = self.grid[row][column]
 
-                        # My ships
-                        if key == -1:
-                            color = BLACK
+                    # My ships
+                    if key == -1:
+                        color = BLACK
 
-                        # In this case 'key" = player_id
-                        if key in self.players_colors.keys():
-                            color = self.players_colors[key]
-                            # self.color = GREEN
+                    # In this case 'key" = player_id
+                    # if key in self.players_colors.keys():
+                    #     color = self.players_colors[key]
+                    #     # self.color = GREEN
+                    #
+                    # if key in self.shots_colors.keys():
+                    #     color = self.shots_colors[key]
+                    #
+                    #     # For cases:
+                    #     # - My ship was damaged
+                    #     # - My hit was successful
+                    #     if key in [-10, -11]:
+                    #         draw_cross(row, column)
+                    #
+                    #     # Someone made a shot, but missed
+                    #     elif key == -12:
+                    draw_dash(row, column)
 
-                        if key in self.shots_colors.keys():
-                            color = self.shots_colors[key]
+                        # else:
+                        #     draw_dash
+                    pygame.draw.rect(self.screen,
+                                     color,
+                                     [(MARGIN + WIDTH) * column + MARGIN,
+                                      (MARGIN + HEIGHT) * row + MARGIN,
+                                      WIDTH,
+                                      HEIGHT])
 
-                            # For cases:
-                            # - My ship was damaged
-                            # - My hit was successful
-                            if key in [-10, -11]:
-                                draw_cross(row, column)
-
-                            # Someone made a shot, but missed
-                            elif key == -12:
-                                draw_dash(row, column)
-
-                            # else:
-                            #     draw_dash
-                        pygame.draw.rect(self.screen,
-                                         color,
-                                         [(MARGIN + WIDTH) * column + MARGIN,
-                                          (MARGIN + HEIGHT) * row + MARGIN,
-                                          WIDTH,
-                                          HEIGHT])
-
-                        # pygame.draw.line(self.screen, self.color,
-                        #                  (0, 100), (50, 100)
-                        #                  )
+                    # pygame.draw.line(self.screen, self.color,
+                    #                  (0, 100), (50, 100)
+                    #                  )
 
 
-                        # pygame.draw.line(self.screen, BLACK, (120, 100), (195, 195), 3)
-                        # pygame.draw.line(self.screen, BLACK, (195, 100), (120, 195), 3)
-            except IndexError:
-                pass
+                    # pygame.draw.line(self.screen, BLACK, (120, 100), (195, 195), 3)
+                    # pygame.draw.line(self.screen, BLACK, (195, 100), (120, 195), 3)
+            # except IndexError:
+            #     pass
 
 
 
@@ -582,7 +595,9 @@ class GUI(object):
                     for i in range(x1, x2 + 1):
                         for j in range(y1, y2 + 1):
                             # Specify the color of my ships
-                            self.grid[i][j] = self.client.my_player_id
+                            print i, j
+                            self.grid[i][j] = -12
+                            # self.grid[i][j] = self.client.my_player_id
                     # print x1, x2, y1, y2
 
             except AttributeError:
@@ -617,25 +632,25 @@ class GUI(object):
         :param hit_successful: (str)
         :param my_ship_was_damaged: (bool)
         '''
-        target_row, target_column = int(target_row), int(target_column)
+        i, j = int(target_row), int(target_column)
 
         # TODO: Add color for damaged_player_id (in case of hit_successful)
 
         with lock:
             # Depending on whether the hit was successful or not, mark cell differently
             if my_ship_was_damaged:
-                self.grid[target_row][target_column] = -10
+                self.grid[i][j] = -10
 
                 if damaged_player_id:
-                    self.grid[target_row][target_column] = self.players_colors[damaged_player_id]
+                    self.grid[i][j] = self.players_colors[damaged_player_id]
 
             # My hit was successful, update the battlefield
             elif hit_successful:
-                self.grid[target_row][target_column] = -11
+                self.grid[i][j] = -11
 
             # I made shot, but I missed
             else:
-                self.grid[target_row][target_column] = -12
+                self.grid[i][j] = -12
 
 
     #################
@@ -969,7 +984,7 @@ class GUI(object):
                 self.add_notification("Ships placed successfully")
             else:
                 # Unblock button place ships
-                # self.place_ships_b.config(state=DISABLED)
+                self.place_ships_b.config(state=DISABLED)
 
                 # Update notification area
                 error_msg = error_code_to_string(resp_code)
@@ -985,7 +1000,7 @@ class GUI(object):
                 # Update battlefield in pygame
                 self.mark_cell(target_row, target_column, hit_successful, damaged_player_id)
 
-                if hit_successful:
+                if hit_successful == "1":
                     self.add_notification("Shot was successful")
                 else:
                     self.add_notification("It was missing shot")
@@ -1128,6 +1143,7 @@ class GUI(object):
         elif command == COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT:
             map_id, initiator_id, row, column = parse_data(data)
 
+            print map_id, "<<<<<<<<<<>>>>>>>", self.selected_map_id
             if map_id == self.selected_map_id:
                 hit_successful = None  # because player shouldn't know about it
 
