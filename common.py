@@ -49,6 +49,10 @@ COMMAND = enum(
     KICK_PLAYER='11',
 
     SPECTATOR_MODE='12',
+    EXISTING_SHOTS='13',
+
+    PLAYERS_ON_MAP='14',
+    MY_SHIPS_ON_MAP='15',
 
     # INVITE_PLAYERS='10',
 
@@ -56,13 +60,14 @@ COMMAND = enum(
     NOTIFICATION=enum(
         PLAYER_JOINED_TO_GAME='21',
         YOUR_SHIP_WAS_DAMAGED='22',
+
         # YOUR_SHIP_SANK='23',
         SOMEONES_SHIP_SANK='24',
-        YOUR_TURN_TO_MOVE='25',
-        YOU_ARE_KICKED='26',
+        SOMEONE_MADE_SHOT='25',
+        YOUR_TURN_TO_MOVE='26',
+        YOU_ARE_KICKED='27',
 
-        SAVE_PLAYER_ID='27'
-        # SERVER_ONLINE='27'
+        SAVE_PLAYER_ID='28'
     )
 )
 
@@ -76,7 +81,7 @@ RESP = enum(
     MAP_NAME_ALREADY_EXISTS='4',
     MAP_DOES_NOT_EXIST='5',
     GAME_ALREADY_STARTED='6',
-    # ALREADY_JOINED_TO_MAP='7',
+    ALREADY_JOINED_TO_MAP='7',
 
     LACK_OF_PLACE_FOR_SHIPS='8'
 )
@@ -106,8 +111,8 @@ def error_code_to_string(err_code):
         err_text = "Given map doesn't exist"
     elif err_code == RESP.GAME_ALREADY_STARTED:
         err_text = "Game already started"
-    # elif err_code == RESP.ALREADY_JOINED_TO_MAP:
-    #     err_text = "You already joined to requested map"
+    elif err_code == RESP.ALREADY_JOINED_TO_MAP:
+        err_text = "You already joined to requested map"
     elif err_code == RESP.LACK_OF_PLACE_FOR_SHIPS:
         err_text = "There's no place to locate all ships"
     return err_text
@@ -148,6 +153,13 @@ def command_to_str(command):
         text = "Kick player"
     elif command == COMMAND.SPECTATOR_MODE:
         text = "Spectator mode"
+    elif command == COMMAND.EXISTING_SHOTS:
+        text = "Existing shots"
+
+    elif command == COMMAND.PLAYERS_ON_MAP:
+        text = "Players on map"
+    elif command == COMMAND.MY_SHIPS_ON_MAP:
+        text = "My ships on map"
     # elif command == COMMAND.INVI
 
 
@@ -160,15 +172,14 @@ def command_to_str(command):
     #     text = "Notif. My ship sank"
     elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
         text = "Notif. Another player damaged another player's ship"
+    elif command == COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT:
+        text = "Notif. Someone made a shot"
     elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
         text = "Notif. My turn to move"
     elif command == COMMAND.NOTIFICATION.YOU_ARE_KICKED:
         text = "Notif. You're kicked from the map"
-
     elif command == COMMAND.NOTIFICATION.SAVE_PLAYER_ID:
         text = "Notif. Save your player_id"
-    # elif command == COMMAND.NOTIFICASERVER_ONLINE
-
     return text
 
 
@@ -194,6 +205,7 @@ def pack_data(data):
     :param data: (list) of values to pack
     :return: (str) - packed data joined by SEP_DATA separator
     '''
+    data = [str(el) for el in data]
     return SEP_DATA.join(data)
 
 

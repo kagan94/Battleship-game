@@ -52,15 +52,18 @@ class Map(BaseModel):
 
 
 class Player_to_map(BaseModel):
+    id = IntegerField(primary_key=True)
     map = ForeignKeyField(Map)
     player = ForeignKeyField(Player, related_name="maps")  # user's playing on these maps
     time_connected = DateTimeField(default=datetime.datetime.now)
+    disconnected = IntegerField()
 
     def __str__(self):
-        return "Map_id:%s, player:%s, time_connected:%s" % (self.map_id, self.player.nickname, self.time_connected)
+        return "Id:%s, Map_id:%s, player:%s, time_connected:%s, disconnected:%s"\
+               % (self.id, self.map_id, self.player.nickname, self.time_connected, self.disconnected)
 
-    class Meta:
-        primary_key = CompositeKey('map', 'player')
+    # class Meta:
+    #     primary_key = CompositeKey('map', 'player')
 
 
 class Ship_to_map(BaseModel):
@@ -72,12 +75,13 @@ class Ship_to_map(BaseModel):
     column_start = IntegerField()
     column_end = IntegerField()
     ship_type = IntegerField()
+    totally_sank = IntegerField()
 
     def __str__(self):
         return "Location_id:%s, Map_id:%s, player:%s, row_start:%s, row_end:%s, column_start:%s, " \
-               "column_end:%s, ship_type:%s"\
+               "column_end:%s, ship_type:%s, totally_sank:%s"\
                %(self.location_id, self.map_id, self.player.nickname, self.row_start, self.row_end,
-                 self.column_start, self.column_end, self.ship_type)
+                 self.column_start, self.column_end, self.ship_type, self.totally_sank)
 
     # class Meta:
     #     primary_key = CompositeKey('', 'map', 'player')

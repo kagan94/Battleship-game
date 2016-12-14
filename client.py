@@ -253,6 +253,23 @@ class Client(object):
         query = pack_query(COMMAND.SPECTATOR_MODE, self.selected_server_id, self.gui.selected_map_id)
         self.send_request(query)
 
+    def get_existing_shots(self):
+        # Request to server to go into spectator mode
+        query = pack_query(COMMAND.EXISTING_SHOTS, self.selected_server_id, self.gui.selected_map_id)
+        self.send_request(query)
+
+    def players_on_map(self):
+        if self.gui.selected_map_id:
+            # Request to server to go into spectator mode
+            query = pack_query(COMMAND.PLAYERS_ON_MAP, self.selected_server_id, self.gui.selected_map_id)
+            self.send_request(query)
+
+    def my_ships_on_map(self):
+        if self.gui.selected_map_id:
+            # Request to server to go into spectator mode
+            query = pack_query(COMMAND.MY_SHIPS_ON_MAP, self.selected_server_id, self.gui.selected_map_id)
+            self.send_request(query)
+
     # Handlers ========================================================================
     def on_response(self, channel, method, props, body):
 
@@ -365,9 +382,9 @@ def main():
             # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
             # gui.choose_server_window()
 
-            client.selected_server_id = 2
-            client.my_player_id = 48
-            gui.selected_map_id = 83
+            client.selected_server_id = '2'
+            client.my_player_id = 49
+            gui.selected_map_id = '83'
             gui.field_size = 20
 
             client.join_game()

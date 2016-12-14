@@ -29,12 +29,11 @@
 * list of servers online (GUI)
 * fixed bug with putting server name into Redis
 * now server_id and server_name are stored as hash map in Redis instead of list as it was earlier
-
+* add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in make_hit function) (server)
+* if ship sank, send notification to him
 * list of maps done
 
 ## TODO Server:
-* add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0 (in make_hit function)
-* if ship sank, send notification to all players in this game
 * notify next player if hit = 0
 * kick player
 * change admin after timeout

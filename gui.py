@@ -12,6 +12,20 @@ from client import lock
 from common import *
 
 
+######################
+# Globals for Pygame
+# This sets the WIDTH and HEIGHT of each grid location
+HEIGHT = 12
+WIDTH = 12
+
+# This sets the margin between each cell
+MARGIN = 2
+
+# Define some general colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+
+
 class GUI(object):
     nickname_root = None
     server_root = None
@@ -91,8 +105,8 @@ class GUI(object):
 
             # Catch error "can't invoke "update" command:
             # application has been destroyed
-            except TclError:
-                break
+            except TclError, KeyboardInterrupt:
+                return
             except AttributeError:
                 print "Error: root can't be NoneType"
                 break
@@ -294,30 +308,28 @@ class GUI(object):
         label = Label(self.players_root, text="Players Online")
         label.pack()
 
-        self.players_on_map_l = ScrolledText(self.players_root, width=12, height=15)
-        self.players_on_map_l.pack()
+        self.players_l = ScrolledText(self.players_root, width=12, height=15)
+        self.players_l.pack()
 
         self.place_ships_b = Button(self.players_root, state=NORMAL,
-                                    text="Place ships", command = self.on_place_ships)
+                                    text="Place ships", command=self.on_place_ships)
         self.place_ships_b.pack(padx=10, pady=10)
 
-
-
-        # ONLY TO TEST !!!!!!!!!!
+        # Spectator mode
         self.spectator_mode_b = Button(self.players_root, state=NORMAL,
                                        text="Spectator mode", command=self.client.spectator_mode)
         self.spectator_mode_b.pack(padx=10, pady=10)
 
-
-
-
+        # Kick player
         self.kick_player_b = Button(self.players_root, state=DISABLED,
                                     text="Kick selected player", command=self.on_kick_player)
         self.kick_player_b.pack(padx=5, pady=5)
 
+        # Disconnect from the game
         self.disconnect_b = Button(self.players_root, text="Disconnect", command=self.on_disconnect)
         self.disconnect_b.pack()
 
+        # Quit
         self.quit_b = Button(self.players_root, text="Quit from the game", command=self.on_quit)
         self.quit_b.pack()
 
@@ -326,6 +338,10 @@ class GUI(object):
         self.destroy_previous_root()
 
         self.players_on_map_window()
+
+        # Request to get all players on the map and player's ships
+        self.client.my_ships_on_map()
+        self.client.players_on_map()
 
         # print "RUN GAME"
 
@@ -343,6 +359,7 @@ class GUI(object):
 
         field_name = self.selected_map
         self.my_ships_locations = []
+        self.players_on_map = {}  # key - player_id, value - dict("name":nickname, "disconnected":val)
 
         def get_colors():
             ''' Return list with 15 colors (as tuples) '''
@@ -384,20 +401,10 @@ class GUI(object):
         }
 
         ##############
-        # Define some general colors
-        BLACK = (0, 0, 0)
-        WHITE = (255, 255, 255)
 
         # By default color for my ships is GREEN
         GREEN = (0, 255, 0)
         self.players_colors[self.client.my_player_id] = GREEN
-
-        # This sets the WIDTH and HEIGHT of each grid location
-        HEIGHT = 12
-        WIDTH = 12
-
-        # This sets the margin between each cell
-        MARGIN = 2
 
         # Create a 2 dimensional array. A two dimensional
         # array is simply a list of lists.
@@ -405,12 +412,12 @@ class GUI(object):
 
         self.size = self.field_size
 
-        for self.row in range(self.size):
+        for row in range(self.size):
             # Add an empty array that will hold each cell
             # in this row
             self.grid.append([])
-            for self.column in range(self.size):
-                self.grid[self.row].append(0)  # Append a cell
+            for column in range(self.size):
+                self.grid[row].append(0)  # Append a cell
 
         # Set row 1, cell 5 to one.
         # (Remember rows and column numbers start at zero.)
@@ -433,6 +440,25 @@ class GUI(object):
         # Used to manage how fast the screen updates
         clock = pygame.time.Clock()
 
+        def draw_dash(row, column):
+            x1 = (MARGIN + WIDTH) * row
+            x2 = (MARGIN + WIDTH) * row + MARGIN + WIDTH
+            y1 = y2 = (MARGIN + HEIGHT) * column + MARGIN + (HEIGHT / 2)
+
+            pygame.draw.line(self.screen, BLACK, (x1, y1), (x2, y2), 3)
+
+        def draw_cross(row, column):
+            x1 = (MARGIN + WIDTH) * row
+            x2 = (MARGIN + WIDTH) * row + MARGIN + WIDTH
+            y1 = (MARGIN + HEIGHT) * column
+            y2 = (MARGIN + HEIGHT) * column + MARGIN + HEIGHT
+
+            pygame.draw.line(self.screen, BLACK, (x1, y1), (x2, y2), 3)
+            pygame.draw.line(self.screen, BLACK, (x2, y1), (x1, y2), 3)
+
+            # print x1, x2, y1, y2, "<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+
+
         # -------- Main Program Loop -----------
         while not done:
             for event in pygame.event.get():  # User did something
@@ -447,42 +473,75 @@ class GUI(object):
                     target_column = pos[0] // (WIDTH + MARGIN)
                     target_row = pos[1] // (HEIGHT + MARGIN)
 
-                    cell = self.grid[target_row][target_column]
+                    try:
+                        cell = self.grid[target_row][target_column]
+                    except IndexError:
+                        break
 
                     # Request to register shot
                     # Here we need to check that player didn't shot in one cell twice
-                    # if cell not in self.players_colors.keys() and cell not in self.shots_colors.keys():
-                    #     self.client.make_shot(target_row, target_column)
-
-                    print("Click ", pos, "Grid coordinates: ", target_row, target_column)
+                    if cell not in self.players_colors.keys() and cell not in self.shots_colors.keys():
+                        self.client.make_shot(target_row, target_column)
+                        print("Click ", pos, "Grid coordinates: ", target_row, target_column)
 
             # Set the screen background
             self.screen.fill(BLACK)
 
             try:
                 # Draw the grid
-                for self.row in range(self.size):
-                    for self.column in range(self.size):
-                        self.color = WHITE
+                for row in range(self.size):
+                    for column in range(self.size):
+                        color = WHITE
 
-                        player_id = self.grid[self.row][self.column]
+                        key = self.grid[row][column]
 
-                        # Here was click
-                        if player_id == -1:
-                            self.color = BLACK
+                        # My ships
+                        if key == -1:
+                            color = BLACK
 
-                        if player_id in self.players_colors.keys():
-                            self.color = self.players_colors[player_id]
+                        # In this case 'key" = player_id
+                        if key in self.players_colors.keys():
+                            color = self.players_colors[key]
                             # self.color = GREEN
 
+                        if key in self.shots_colors.keys():
+                            color = self.shots_colors[key]
+
+                            # For cases:
+                            # - My ship was damaged
+                            # - My hit was successful
+                            if key in [-10, -11]:
+                                draw_cross(row, column)
+
+                            # Someone made a shot, but missed
+                            elif key == -12:
+                                draw_dash(row, column)
+
+                            # else:
+                            #     draw_dash
                         pygame.draw.rect(self.screen,
-                                         self.color,
-                                         [(MARGIN + WIDTH) * self.column + MARGIN,
-                                          (MARGIN + HEIGHT) * self.row + MARGIN,
+                                         color,
+                                         [(MARGIN + WIDTH) * column + MARGIN,
+                                          (MARGIN + HEIGHT) * row + MARGIN,
                                           WIDTH,
                                           HEIGHT])
+
+                        # pygame.draw.line(self.screen, self.color,
+                        #                  (0, 100), (50, 100)
+                        #                  )
+
+
+                        # pygame.draw.line(self.screen, BLACK, (120, 100), (195, 195), 3)
+                        # pygame.draw.line(self.screen, BLACK, (195, 100), (120, 195), 3)
             except IndexError:
                 pass
+
+
+
+            # x3 = (MARGIN + WIDTH) * self.row
+
+
+            # pygame.draw.line(self.screen, BLACK, (x3, x1), (x2, x3), 4)
 
             # print self.pygame_tasks._qsize()
             # try:
@@ -516,15 +575,18 @@ class GUI(object):
 
         # ships_locations = [(x1, x2, y1, y2, ship_size), ...]
         with lock:
-            for x1, x2, y1, y2, ship_size in self.my_ships_locations:
-                x1, x2, y1, y2 = map(int, [x1, x2, y1, y2])
+            try:
+                for x1, x2, y1, y2, ship_size in self.my_ships_locations:
+                    x1, x2, y1, y2 = map(int, [x1, x2, y1, y2])
 
-                for i in range(x1, x2 + 1):
-                    for j in range(y1, y2 + 1):
-                        # Specify the color of my ships
-                        self.grid[i][j] = self.client.my_player_id
+                    for i in range(x1, x2 + 1):
+                        for j in range(y1, y2 + 1):
+                            # Specify the color of my ships
+                            self.grid[i][j] = self.client.my_player_id
+                    # print x1, x2, y1, y2
 
-            # print x1, x2, y1, y2
+            except AttributeError:
+                pass
 
     def go_to_spectator_mode(self, info):
         ''' Spectator mode allows to see all ships of all players '''
@@ -546,7 +608,7 @@ class GUI(object):
                     for j in range(y1, y2 + 1):
                         self.grid[i][j] = player_id
 
-    def mark_cell(self, target_row, target_column, hit_successful, my_ship_was_damaged=False):
+    def mark_cell(self, target_row, target_column, hit_successful, my_ship_was_damaged=False, damaged_player_id=None):
         '''
         Mark ceil after shot or someone made a damage for my ship
 
@@ -555,11 +617,17 @@ class GUI(object):
         :param hit_successful: (str)
         :param my_ship_was_damaged: (bool)
         '''
+        target_row, target_column = int(target_row), int(target_column)
+
+        # TODO: Add color for damaged_player_id (in case of hit_successful)
 
         with lock:
             # Depending on whether the hit was successful or not, mark cell differently
             if my_ship_was_damaged:
                 self.grid[target_row][target_column] = -10
+
+                if damaged_player_id:
+                    self.grid[target_row][target_column] = self.players_colors[damaged_player_id]
 
             # My hit was successful, update the battlefield
             elif hit_successful:
@@ -716,8 +784,8 @@ class GUI(object):
         msg = "> " + str(msg) + "\n"
         self.notifications.insert(0.0, msg)
 
-    def show_popup(self, msg):
-        print msg
+    # def show_popup(self, msg):
+    #     print msg
         # tkMessageBox.showinfo("Notification", msg)
         # self.popup_msg = None
         # self.popup_msg = msg
@@ -846,7 +914,7 @@ class GUI(object):
 
         # +
         elif command == COMMAND.JOIN_EXISTING_GAME:
-            if resp_code == RESP.OK:
+            if resp_code in [RESP.OK, RESP.ALREADY_JOINED_TO_MAP]:
                 print self.field_size
                 print self.selected_map_id
 
@@ -857,14 +925,23 @@ class GUI(object):
 
                 print "Command draw field"
 
+                # If player already joined the game
+                # Then trigger command to get freshest shots
+                if resp_code == RESP.ALREADY_JOINED_TO_MAP:
+                    self.client.get_existing_shots()
+
             else:
                 error = "Command: %s \n" % command_to_str(command)
                 error += error_code_to_string(resp_code)
 
-                with lock:
-                    # Show window with error msg + unblock buttons
-                    self.unfreeze_join_game_buttons()
-                    self.show_popup(error)
+                self.add_notification(error)
+
+                # Unblock buttons
+                self.unfreeze_join_game_buttons()
+
+                # with lock:
+                # Show window with error msg + unblock buttons
+                # self.show_popup(error)
 
         # +
         elif command == COMMAND.PLACE_SHIPS:
@@ -900,15 +977,18 @@ class GUI(object):
 
         # +
         elif command == COMMAND.MAKE_HIT:
+
             if resp_code == RESP.OK:
-                target_row, target_column, hit_successful = parse_data(data)
+                target_row, target_column, hit_successful, damaged_player_id = parse_data(data)
+
 
                 # Update battlefield in pygame
-                self.mark_cell(target_row, target_column, hit_successful)
+                self.mark_cell(target_row, target_column, hit_successful, damaged_player_id)
 
-                # Colors for different types of shots
-                # TODO: Update GUI. Add hit to the map.
-                # TODO: If game end, then block field + update notification area
+                if hit_successful:
+                    self.add_notification("Shot was successful")
+                else:
+                    self.add_notification("It was missing shot")
 
                 # TODO: Check whether ship is completely sank
 
@@ -940,6 +1020,85 @@ class GUI(object):
             # Launch spectator mode in pygame
             self.go_to_spectator_mode(info)
 
+        # +
+        elif command == COMMAND.PLAYERS_ON_MAP:
+            # Compressed data in format (map_id, player_id, nickname, disconnected)
+            info = parse_data(data)
+
+            # Clean list of current players
+            # self.players_l.delete(FIRST, END)
+
+            with lock:
+                # Trigger to append current players to the players list
+                for i in range(0, len(info), 4):
+                    map_id = info[i]
+
+                    # In case of response on old request
+                    if map_id != self.selected_map_id:
+                        break
+
+                    player_id, player_nickname = info[i + 1], info[i + 2]
+                    disconnected = info[i + 3]
+
+                    self.players_l.insert(END, player_nickname)
+
+                    self.players_on_map[player_id] = {
+                        "name": player_nickname,
+                        "disconnected": int(disconnected)
+                    }
+
+                self.add_notification("List of players on this map ws uploaded successfully")
+
+        elif command == COMMAND.MY_SHIPS_ON_MAP:
+            # Compressed data in format
+            # (map_id, row_start, row_end, column_start, column_end, ship_type, totally_sank)
+            info = parse_data(data)
+
+            self.my_ships_locations = []
+
+            with lock:
+                # Trigger to color the battlefield with already made shots
+                for i in range(0, len(info), 7):
+                    map_id = info[i]
+
+                    # In case of response on old request
+                    if map_id != self.selected_map_id:
+                        break
+
+                    x1, x2 = info[i + 1], info[i + 2]
+                    y1, y2 = info[i + 3], info[i + 4]
+                    ship_size, totally_sank = info[i + 5], info[i + 6]
+
+                    ##########
+                    # Place ships on the map in pygame
+                    ship = (x1, x2, y1, y2, ship_size)
+                    self.my_ships_locations.append(ship)
+
+            # Trigger to place ships on the map
+            self.place_ships_on_map()
+
+            self.add_notification("Your ships locations were uploaded successfully")
+
+        # +
+        elif command == COMMAND.EXISTING_SHOTS:
+            # Compressed data in format (target_row, target_column, hit_successful, damaged_player_id)
+            info = parse_data(data)
+
+            # Trigger to color the battlefield with already made shots
+            for i in range(0, len(info), 5):
+                map_id = info[i]
+
+                # In case of response on old request
+                if map_id != self.selected_map_id:
+                    break
+
+                target_row, target_column = info[i + 1], info[i + 2]
+                hit_successful, damaged_player_id = info[i + 3], info[i + 4]
+
+                self.mark_cell(target_row, target_column, hit_successful, damaged_player_id)
+
+            self.add_notification("Existing shots uploaded successfully")
+
         # NOTIFICATIONS FROM SERVER
         # 1) If I'm owner of the map and another player joined
         # 2) Another player damaged my ship
@@ -956,9 +1115,28 @@ class GUI(object):
             # TODO: GUI update status bar about joined player
 
         elif command == COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED:
+            # Update battlefield in pygame
+            map_id, initiator_id, target_row, target_column = parse_data(data)
 
-            # TODO: Check whether ship is completely sank
-            pass
+            if map_id == self.selected_map_id:
+                self.mark_cell(target_row, target_column, None, my_ship_was_damaged=True, damaged_player_id=None)
+
+                # Update notification area
+                msg = command_to_str(command) + "coord(%s,%s)" % (target_row, target_column)
+                self.add_notification(msg)
+
+        elif command == COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT:
+            map_id, initiator_id, row, column = parse_data(data)
+
+            if map_id == self.selected_map_id:
+                hit_successful = None  # because player shouldn't know about it
+
+                # Mark cell on the map in pygame
+                self.mark_cell(row, column, hit_successful)
+
+                # Update notification area
+                msg = command_to_str(command) + "coord(%s,%s)" % (row, column)
+                self.add_notification(msg)
 
         elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
             pass

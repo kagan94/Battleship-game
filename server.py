@@ -252,10 +252,71 @@ class Main_Server(object):
         return resp_code
 
     @refresh_db_connection
-    def notify_about_ship_damage(self, map_id, initiator_id, target_player_id, target_row, target_column):
-        ''' Send notification to damaged player '''
-        self.send()
+    def get_damaged_player_id_by_shot(self, map_id, row, column):
 
+        # Check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
+        # (whether hit was successful or not)
+        hit_query = Ship_to_map.select().where(Ship_to_map.map == map_id,
+                                               # Check by row
+                                               Ship_to_map.row_start <= row, Ship_to_map.row_end >= column,
+                                               # Check by column
+                                               Ship_to_map.column_start <= column, Ship_to_map.column_end >= column)
+        try:
+            record = hit_query.get()
+            return record.player.player_id
+        # Nobody was damaged
+        except Ship_to_map.DoesNotExist:
+            return None
+
+    @refresh_db_connection
+    def existing_shots(self, map_id):
+        ''' Sends existing shots to player '''
+
+        # Compressed data in format (target_row, target_column, hit_successful, damaged_player_id)
+        shots_data = []
+
+        # Get all games which have not been started yet
+        shots_query = Player_hits.select().where(Player_hits.map)
+
+        for s in shots_query:
+            # Compress data
+            if s.hit:
+                damaged_player_id = self.get_damaged_player_id_by_shot(map_id, s.row, s.column)
+            else:
+                damaged_player_id = "-"
+
+            shot = (s.map_id, s.row, s.column, s.hit, damaged_player_id)
+            for el in zip(shot):
+                shots_data.append(str(el[0]))
+
+        data = pack_data(shots_data)
+        return data
+
+    @refresh_db_connection
+    def another_player_made_shot(self, map_id, initiator_id, row, column):
+        ''' Player made a shot, then notify other players about this shot (except player_id) '''
+
+        # Get all players on this map (except initiator and disconnected users)
+        players_query = Player_to_map.select().where(Player_to_map.map == map_id,
+                                                     Player_to_map.player != initiator_id,
+                                                     Player_to_map.disconnected == 0)
+
+        # Send notification about this move
+        for record in players_query:
+            data = pack_data([map_id, initiator_id, row, column])
+            query = pack_resp(COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT, RESP.OK, self.server_id, data)
+
+            # Put notification into the queue
+            self.send_response(nickname=record.player.nickname, query=query)
+
+    def notify_about_ship_damage(self, map_id, initiator_id, target_player_name, target_row, target_column):
+        ''' Send notification to damaged player '''
+
+        data = pack_data([map_id, initiator_id, target_row, target_column])
+        query = pack_resp(COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED, RESP.OK, self.server_id, data)
+
+        # Put notification into the queue
+        self.send_response(nickname=target_player_name, query=query)
 
     @refresh_db_connection
     def make_hit(self, map_id, player_id, target_row, target_column):
@@ -268,7 +329,8 @@ class Main_Server(object):
         '''
         # map_id, row, column = [int(v) for v in [map_id, row, column]]
         # is_game_end can be "0" or "1"
-        resp_code, hit, is_game_end = RESP.OK, "", "0"
+        resp_code, hit, is_game_end = RESP.OK, "0", ""
+        damaged_player_id = ""
 
         # Map doesn't exist
         if not self.map_exists(map_id):
@@ -282,12 +344,10 @@ class Main_Server(object):
 
         # Register new shot
         else:
-            hit = "1"
 
-            # Register hit in DB
-            Player_hits.create(map=map_id, player=player_id, row=target_row, column=target_column, hit=hit)
-
-            # Check whether hit was successful or not
+            #####################
+            # Check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
+            # (whether hit was successful or not)
             hit_query = Ship_to_map.select().where(Ship_to_map.player != player_id,
                                                    Ship_to_map.map == map_id,
                                                    # Check by row
@@ -300,19 +360,35 @@ class Main_Server(object):
                 record = hit_query.get()
                 hit = "1"
 
-                # Query to notify player whose ship was damaged
+                # Notify player whose ship was damaged
                 self.notify_about_ship_damage(map_id,
                                               initiator_id=player_id,
-                                              target_player_id=record.player,
+                                              target_player_name=record.player.nickname,
                                               target_row=target_row,
                                               target_column=target_column)
+
+                # Player who was damaged
+                damaged_player_id = record.player.player_id
+
+                # self.notify_about_ship_damage(map_id,
+                #                               initiator_id=player_id,
+
                 # TODO: Notify about next move
 
             # Nobody was damaged
             except Ship_to_map.DoesNotExist:
                 pass
 
-            # TODO: add check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
+            # Register hit in DB
+            Player_hits.create(map=map_id, player=player_id,
+                               row=int(target_row), column=int(target_column),
+                               hit=hit)
+
+            # Notify other players about this shot
+            self.another_player_made_shot(map_id, player_id, target_row, target_column)
+
+
+            # Ship_to_map.totally_sank !!!!!!!!!!!!!
 
             # TODO: if shot was successful, check is the game ended and change var "is_game_end"
             is_game_end = "1"  # ?????? change later
@@ -322,7 +398,7 @@ class Main_Server(object):
             # TODO: if ship sank, send notification to damaged player
             # TODO: notify next player if hit = 0
 
-        return resp_code, row, column, hit, is_game_end
+        return resp_code, hit, damaged_player_id
 
     @refresh_db_connection
     def create_new_map(self, owner_id, name, size):
@@ -373,8 +449,8 @@ class Main_Server(object):
         # Player already joined this map
         elif Player_to_map.select().where(Player_to_map.map == map_id,
                                           Player_to_map.player == player_id).count() > 0:
-            resp_code = RESP.OK
-            # resp_code = RESP.ALREADY_JOINED_TO_MAP
+            # resp_code = RESP.OK
+            resp_code = RESP.ALREADY_JOINED_TO_MAP
 
         # Add player to the requested map
         else:
@@ -437,6 +513,45 @@ class Main_Server(object):
         data = pack_data(all_ships)
         return resp_code, data
 
+    @refresh_db_connection
+    def players_on_map(self, player_id, map_id):
+        ''' Return a compressed string (list of current players on requested map) '''
+
+        players_data = []
+
+        # Get all players on map except who requested this command
+        players_query = Player_to_map.select().where(Player_to_map.map == map_id,
+                                                  Player_to_map.player != player_id)
+
+        for p in players_query:
+            # Compress data
+            disconnected = p.disconnected if p.disconnected is not None else "0"
+            player_data = (p.map_id, p.player_id, p.player.nickname, disconnected)
+
+            for el in zip(player_data):
+                players_data.append(str(el[0]))
+
+        data = pack_data(players_data)
+
+        return data
+
+    @refresh_db_connection
+    def my_ships_on_map(self, player_id, map_id):
+        ''' Return compressed str (list of ships locations for particular player '''
+        resp_code, ships_data = RESP.OK, []
+
+        # Get all games which have not been started yet
+        ships_query = Ship_to_map.select().where(Ship_to_map.map == map_id,
+                                                 Ship_to_map.player_id == player_id)
+
+        for s in ships_query:
+            # Compress data
+            ship_data = (map_id, s.row_start, s.row_end, s.column_start, s.column_end, s.ship_type, s.totally_sank)
+            for el in zip(ship_data):
+                ships_data.append(str(el[0]))
+
+        data = pack_data(ships_data)
+        return resp_code, data
 
     ###################
     # Handlers for queue ===================================================================================
@@ -508,11 +623,10 @@ class Main_Server(object):
         elif command == COMMAND.MAKE_HIT:
             map_id, row, column = parse_data(data)
 
-            # target_row, target_column, hit_successful
-            resp_code, row, column, hit, is_game_end = self.make_hit(map_id, player_id, row, column)
+            resp_code, hit_successful, damaged_player_id = self.make_hit(map_id, player_id, row, column)
 
-            # data = pack_data([hit, is_game_end])
-            data = pack_data([hit, is_game_end])
+            # Prepare query and data
+            data = pack_data([row, column, hit_successful, damaged_player_id])
             query = pack_resp(command, resp_code, self.server_id, data)
 
         elif command == COMMAND.DISCONNECT_FROM_GAME:
@@ -530,11 +644,26 @@ class Main_Server(object):
         elif command == COMMAND.KICK_PLAYER:
             pass
 
+        elif command == COMMAND.PLAYERS_ON_MAP:
+            ''' List of all players on the map (including disconnected)'''
+            data = self.players_on_map(player_id, map_id=data)
+            query = pack_resp(command, RESP.OK, self.server_id, data)
+
+        elif command == COMMAND.MY_SHIPS_ON_MAP:
+            ''' List of all players on the map (including disconnected)'''
+            resp_code, data = self.my_ships_on_map(player_id, map_id=data)
+            query = pack_resp(command, resp_code, self.server_id, data)
+
         elif command == COMMAND.SPECTATOR_MODE:
             # Spectator mode. Player can see all ships
             # But he can't take part in the game
             resp_code, data = self.spectator_mode(player_id, map_id=data)
             query = pack_resp(command, resp_code, self.server_id, data)
+
+        elif command == COMMAND.EXISTING_SHOTS:
+            # Usually after connecting to existing game, player sends this command
+            data = self.existing_shots(map_id=data)
+            query = pack_resp(command, RESP.OK, self.server_id, data)
 
         # Put response into the queue
         if query:
