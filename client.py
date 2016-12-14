@@ -343,6 +343,10 @@ def main():
                         help='Port for Redis connection, default is %d' % REDIS_PORT,
                         default=REDIS_PORT)
 
+    parser.add_argument('-t', '--test', type=int,
+                        help='test on another clients, default - %s' % 1,
+                        default=1)
+
     args = parser.parse_args()
 
     # Before Client starts working, we need to check connections to RabbitMQ and Redis
@@ -382,10 +386,19 @@ def main():
             # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
             # gui.choose_server_window()
 
-            client.selected_server_id = '2'
-            client.my_player_id = 49
-            gui.selected_map_id = '83'
-            gui.field_size = 20
+            if args.test == 1:
+                client.nickname = '123sa'
+                client.selected_server_id = '2'
+                client.my_player_id = 48
+                gui.selected_map_id = '83'
+                gui.field_size = 20
+
+            else:
+                client.nickname = 'ff'
+                client.selected_server_id = '2'
+                client.my_player_id = 49
+                gui.selected_map_id = '83'
+                gui.field_size = 20
 
             client.join_game()
 

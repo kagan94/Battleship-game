@@ -74,7 +74,7 @@ class GUI(object):
         notification.pack()
 
         # Notification area
-        self.notifications = ScrolledText(self.root, width=20, height=20, state=NORMAL)
+        self.notifications = ScrolledText(self.root, width=30, height=20, state=NORMAL)
         self.notifications.pack()
 
         # Each 10 ms check whether client received something or not
@@ -446,16 +446,21 @@ class GUI(object):
             # y1, y2 = 120, 120
             # i, j = 19, 19
 
-            x1 = (MARGIN + WIDTH) * j
-            x2 = (MARGIN + WIDTH) * j + MARGIN + WIDTH
-            y1 = y2 = (MARGIN + HEIGHT) * i - ((MARGIN + HEIGHT) / 2)
+            # x1 = (MARGIN + WIDTH) * j
+            # x2 = (MARGIN + WIDTH) * j + MARGIN + WIDTH
+            # y1 = y2 = (MARGIN + HEIGHT) * i - ((MARGIN + HEIGHT) / 2)
+
+            x1 = (MARGIN + WIDTH) * i
+            x2 = (MARGIN + WIDTH) * i + MARGIN + WIDTH
+            y1 = (MARGIN + HEIGHT) * j + (MARGIN + HEIGHT)/2
+            y2 = (MARGIN + HEIGHT) * j + (MARGIN + HEIGHT)/2
 
             # if y2 > self.maxx:
             #     self.maxx = y2
             #     print x1, x2, "_____"
 
             # x1, x2, y2 = 0, 14, 275
-            y1 = y2
+            # y1 = y2
 
             # print x1, x2, y2, MARGIN + WIDTH, y2 >= self.max_size, x1 >= self.max_size, x2 >= self.max_size,
             pygame.draw.line(self.screen, BLACK, (x1, y1), (x2, y2), 3)
@@ -508,70 +513,42 @@ class GUI(object):
 
                     key = self.grid[row][column]
 
+                    # print self.players_colors
                     # My ships
-                    if key == -1:
-                        color = BLACK
+                    # if key == -1:
+                        # color = self.players_colors[self.client.my_player_id]
+                        # color = BLACK
 
                     # In this case 'key" = player_id
-                    # if key in self.players_colors.keys():
-                    #     color = self.players_colors[key]
-                    #     # self.color = GREEN
-                    #
-                    # if key in self.shots_colors.keys():
-                    #     color = self.shots_colors[key]
-                    #
-                    #     # For cases:
-                    #     # - My ship was damaged
-                    #     # - My hit was successful
-                    #     if key in [-10, -11]:
-                    #         draw_cross(row, column)
-                    #
-                    #     # Someone made a shot, but missed
-                    #     elif key == -12:
-                    draw_dash(row, column)
+                    if key in self.players_colors.keys():
+                        color = self.players_colors[key]
+                        # self.color = GREEN
 
-                        # else:
-                        #     draw_dash
+                    damaged_player_id = str((-1) * int(key))
+
+                    if damaged_player_id in self.players_on_map.keys():
+                        # print self.players_colors
+                        color = self.players_colors[damaged_player_id]
+
                     pygame.draw.rect(self.screen,
-                                     color,
-                                     [(MARGIN + WIDTH) * column + MARGIN,
-                                      (MARGIN + HEIGHT) * row + MARGIN,
-                                      WIDTH,
-                                      HEIGHT])
+                                         color,
+                                         [(MARGIN + WIDTH) * column + MARGIN,
+                                          (MARGIN + HEIGHT) * row + MARGIN,
+                                          WIDTH,
+                                          HEIGHT])
 
-                    # pygame.draw.line(self.screen, self.color,
-                    #                  (0, 100), (50, 100)
-                    #                  )
+                    # For cases:
+                    # - My ship was damaged
+                    # - My hit was successful
+                    if key in [-10, -11] or damaged_player_id in self.players_on_map.keys():
+                        # draw_dash(column, row)
+                        draw_cross(column, row)
 
-
-                    # pygame.draw.line(self.screen, BLACK, (120, 100), (195, 195), 3)
-                    # pygame.draw.line(self.screen, BLACK, (195, 100), (120, 195), 3)
+                    # Someone made a shot, but missed
+                    elif key == -12:
+                        draw_dash(column, row)
             # except IndexError:
             #     pass
-
-
-
-            # x3 = (MARGIN + WIDTH) * self.row
-
-
-            # pygame.draw.line(self.screen, BLACK, (x3, x1), (x2, x3), 4)
-
-            # print self.pygame_tasks._qsize()
-            # try:
-            #     task = self.pygame_tasks.get(False)
-            #
-            # # Handle empty queue here
-            # except Queue.Empty:
-            #     pass
-            # else:
-            #     # Handle task here and call q.task_done()
-            #     # GAME_COMMAND.PLACE_SHIPS
-            #     # self.process_pygame_task(task)
-            #     print task
-            #     with lock:
-            #         print self.my_ships_locations
-
-                # self.pygame_tasks.task_done()
 
             # Limit to 60 frames per second
             clock.tick(60)
@@ -595,9 +572,7 @@ class GUI(object):
                     for i in range(x1, x2 + 1):
                         for j in range(y1, y2 + 1):
                             # Specify the color of my ships
-                            print i, j
-                            self.grid[i][j] = -12
-                            # self.grid[i][j] = self.client.my_player_id
+                            self.grid[i][j] = self.client.my_player_id
                     # print x1, x2, y1, y2
 
             except AttributeError:
@@ -623,7 +598,7 @@ class GUI(object):
                     for j in range(y1, y2 + 1):
                         self.grid[i][j] = player_id
 
-    def mark_cell(self, target_row, target_column, hit_successful, my_ship_was_damaged=False, damaged_player_id=None):
+    def mark_cell(self, target_row, target_column, hit_successful, damaged_player_id=None):
         '''
         Mark ceil after shot or someone made a damage for my ship
 
@@ -637,16 +612,27 @@ class GUI(object):
         # TODO: Add color for damaged_player_id (in case of hit_successful)
 
         with lock:
-            # Depending on whether the hit was successful or not, mark cell differently
-            if my_ship_was_damaged:
-                self.grid[i][j] = -10
 
-                if damaged_player_id:
-                    self.grid[i][j] = self.players_colors[damaged_player_id]
+            if hit_successful == "1" and damaged_player_id is not None:
+                self.grid[i][j] = (-1) * int(damaged_player_id)
 
-            # My hit was successful, update the battlefield
-            elif hit_successful:
+            elif hit_successful == "1":
                 self.grid[i][j] = -11
+
+            # self my_ship_was_damaged
+
+            # Depending on whether the hit was successful or not, mark cell differently
+            # if my_ship_was_damaged is None:
+            #     self.grid[i][j] = -10
+            #
+            #     print "damaged_player_id %s, type(%s)" % (damaged_player_id, type(damaged_player_id))
+            #     if damaged_player_id is not None:
+            #         print 111111111, (-1) * int(damaged_player_id), str(int(damaged_player_id)) in self.players_colors.keys()
+            #         self.grid[i][j] = (-1) * int(damaged_player_id)
+            #
+            # # My hit was successful, update the battlefield
+            # elif hit_successful == "1":
+            #     self.grid[i][j] = -11
 
             # I made shot, but I missed
             else:
@@ -1055,12 +1041,17 @@ class GUI(object):
                     player_id, player_nickname = info[i + 1], info[i + 2]
                     disconnected = info[i + 3]
 
-                    self.players_l.insert(END, player_nickname)
 
+                    self.players_l.insert(END, player_nickname)
                     self.players_on_map[player_id] = {
                         "name": player_nickname,
                         "disconnected": int(disconnected)
                     }
+
+                    # If player's ships don't have color, generate a new color
+                    if player_id not in self.players_colors.keys():
+                        color = self.possible_colors.pop(0)
+                        self.players_colors[player_id] = color
 
                 self.add_notification("List of players on this map ws uploaded successfully")
 
@@ -1110,6 +1101,7 @@ class GUI(object):
                 target_row, target_column = info[i + 1], info[i + 2]
                 hit_successful, damaged_player_id = info[i + 3], info[i + 4]
 
+                # print damaged_player_id
                 self.mark_cell(target_row, target_column, hit_successful, damaged_player_id)
 
             self.add_notification("Existing shots uploaded successfully")
@@ -1117,10 +1109,9 @@ class GUI(object):
         # NOTIFICATIONS FROM SERVER
         # 1) If I'm owner of the map and another player joined
         # 2) Another player damaged my ship
-        # 3) My ship sank
-        # 4) My turn to move
-        # 5) You're kicked
-        # 6) Another player damaged another player's ship
+        # 3) My turn to move
+        # 4) You're kicked
+        # 5) Another player damaged another player's ship
 
         # +
         elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
@@ -1134,10 +1125,12 @@ class GUI(object):
             map_id, initiator_id, target_row, target_column = parse_data(data)
 
             if map_id == self.selected_map_id:
-                self.mark_cell(target_row, target_column, None, my_ship_was_damaged=True, damaged_player_id=None)
+                self.mark_cell(target_row, target_column,
+                               hit_successful="1", damaged_player_id=self.client.my_player_id)
 
                 # Update notification area
-                msg = command_to_str(command) + "coord(%s,%s)" % (target_row, target_column)
+                msg = command_to_str(command) + "coord(%s,%s) by %s"\
+                                                % (target_row, target_column, self.players_on_map[initiator_id]["name"])
                 self.add_notification(msg)
 
         elif command == COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT:
@@ -1145,10 +1138,10 @@ class GUI(object):
 
             print map_id, "<<<<<<<<<<>>>>>>>", self.selected_map_id
             if map_id == self.selected_map_id:
-                hit_successful = None  # because player shouldn't know about it
 
                 # Mark cell on the map in pygame
-                self.mark_cell(row, column, hit_successful)
+                # hit - "0"  # because player shouldn't know about it
+                self.mark_cell(row, column, hit_successful="0")
 
                 # Update notification area
                 msg = command_to_str(command) + "coord(%s,%s)" % (row, column)

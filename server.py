@@ -256,17 +256,27 @@ class Main_Server(object):
 
         # Check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
         # (whether hit was successful or not)
+        # print row, column
         hit_query = Ship_to_map.select().where(Ship_to_map.map == map_id,
                                                # Check by row
-                                               Ship_to_map.row_start <= row, Ship_to_map.row_end >= column,
+                                               Ship_to_map.row_start <= row, Ship_to_map.row_end >= row,
                                                # Check by column
                                                Ship_to_map.column_start <= column, Ship_to_map.column_end >= column)
-        try:
-            record = hit_query.get()
-            return record.player.player_id
+        # try:
+        #     record = hit_query.get()
+        #     return record.player.player_id
+        # # Nobody was damaged
+        # except Ship_to_map.DoesNotExist:
+        #     return None
+
+        # try:
+        # print map_id
+        # print record, record.player.player_id, "xxxxxxxxxx"
+        record = hit_query.get()
+        return record.player.player_id
         # Nobody was damaged
-        except Ship_to_map.DoesNotExist:
-            return None
+        # except Ship_to_map.DoesNotExist:
+        #     return None
 
     @refresh_db_connection
     def existing_shots(self, map_id):
@@ -281,9 +291,12 @@ class Main_Server(object):
         for s in shots_query:
             # Compress data
             if s.hit:
+                # print "sss, ", s.hit
                 damaged_player_id = self.get_damaged_player_id_by_shot(map_id, s.row, s.column)
             else:
                 damaged_player_id = "-"
+
+            # print damaged_player_id
 
             shot = (s.map_id, s.row, s.column, s.hit, damaged_player_id)
             for el in zip(shot):
