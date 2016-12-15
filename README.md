@@ -39,8 +39,6 @@
 * spectator mode (GUI)
 * remove double-click (as triger) on the same coordinate on the field that user can click only once on one coordinate (GUI)
 * Remove glitch with window freezeing while waiting for the response (Maybe through using separate Thread for GUI) (GUI)
-
-
 * PLAYER_JOINED_TO_GAME
 * YOUR_SHIP_WAS_DAMAGED
 * SOMEONE_MADE_SHOT
@@ -49,15 +47,15 @@
 * notification.YOU_ARE_KICKED
 * notification.YOUR_TURN_TO_MOVE
 * notification.GAME_FINISHED
+* Kick player
 * if ship sank, send notification to damaged player
+* Notify next player about his turn
+* Check whether ship is completely sank, then send argument "completely_sank" to player who made shot
+* notify next player if hit = 0
 
 ## TODO Server:
-* kick player
-* change admin after timeout
-
 ## TODO Client:
 * Add "KeyboardInterrupt, SystemExit" after connecting GUI
-
 ## TODO GUI:
 
 ![SQL db scatch](http://clip2net.com/clip/m527982/5b1a1-clip-45kb.png)
