@@ -95,12 +95,11 @@ class Player_hits(BaseModel):
     column = IntegerField()
     time = DateTimeField(default=datetime.datetime.now)
     hit = IntegerField()
-    ship_location_id = IntegerField()
 
     def __str__(self):
-        return "shot_id:%s, map_id:%s, player:%s, row:%s, column:%s, time:%s, hit:%s, ship_location_id:%s" \
+        return "shot_id:%s, map_id:%s, player:%s, row:%s, column:%s, time:%s, hit:%s" \
                % (self.shot_id, self.map_id, self.player.nickname, self.row, self.column,
-                  self.time, self.hit, self.ship_location_id)
+                  self.time, self.hit)
 
 
 # class Invitation(BaseModel):

@@ -825,12 +825,7 @@ class GUI(object):
 
     def on_quit(self):
         ''' Player wants to quit from the game. Should redirect to maps '''
-        with lock:
-            self.pygame_done = True
-
-        self.destroy_previous_root()
-
-        self.choose_map_window()
+        pass
 
     #############################################
     # Other methods
@@ -1067,20 +1062,7 @@ class GUI(object):
             # TODO: Destroy current window and create a new one
 
         elif command == COMMAND.KICK_PLAYER:
-            player_id = data
-
-            if resp_code == RESP.OK:
-                nickname = self.players_on_map[player_id]["name"]
-                # Remove player player list
-                # del self.players_on_map[player_id]
-
-                # TODO: Update list of players
-
-                self.add_notification("Player \"%s\" was successfully kicked" % nickname)
-
-            elif resp_code == RESP.PLAYER_ALREADY_KICKED:
-                self.add_notification("Player \"%s\" already kicked" % player_id)
-
+            pass
 
         elif command == COMMAND.SPECTATOR_MODE:
             info = parse_data(data)

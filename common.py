@@ -87,8 +87,7 @@ RESP = enum(
     GAME_ALREADY_STARTED='6',
     ALREADY_JOINED_TO_MAP='7',
 
-    LACK_OF_PLACE_FOR_SHIPS='8',
-    PLAYER_ALREADY_KICKED='9'
+    LACK_OF_PLACE_FOR_SHIPS='8'
 )
 
 
@@ -208,7 +207,7 @@ def pack_resp(command, resp_code, server_id="", data=""):
     :param data: (list) to pack
     :return: packed elements from the list separated by separator
     '''
-    return SEP.join([str(command), str(resp_code), str(server_id), str(data)])
+    return SEP.join([command, resp_code, server_id, data])
 
 
 def pack_data(data):
