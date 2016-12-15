@@ -40,6 +40,17 @@
 * remove double-click (as triger) on the same coordinate on the field that user can click only once on one coordinate (GUI)
 * Remove glitch with window freezeing while waiting for the response (Maybe through using separate Thread for GUI) (GUI)
 
+
+* PLAYER_JOINED_TO_GAME
+* YOUR_SHIP_WAS_DAMAGED
+* SOMEONE_MADE_SHOT
+* notification.SAVE_PLAYER_ID
+* notification.GAME_STARTED
+* notification.YOU_ARE_KICKED
+* notification.YOUR_TURN_TO_MOVE
+* notification.GAME_FINISHED
+* if ship sank, send notification to damaged player
+
 ## TODO Server:
 * kick player
 * change admin after timeout

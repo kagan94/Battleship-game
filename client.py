@@ -270,6 +270,35 @@ class Client(object):
             query = pack_query(COMMAND.MY_SHIPS_ON_MAP, self.selected_server_id, self.gui.selected_map_id)
             self.send_request(query)
 
+    def kick_player(self, player_id):
+        '''
+        :param player_id: (str) player who should be kicked from the map
+        '''
+        if self.gui.selected_map_id:
+            data = pack_data([self.gui.selected_map_id, player_id])
+
+            # Request to server to kick selected player
+            query = pack_query(COMMAND.KICK_PLAYER, self.selected_server_id, data)
+            self.send_request(query)
+
+    def start_game(self):
+        if self.gui.selected_map_id:
+            # Request to server to start the game
+            query = pack_query(COMMAND.START_GAME, self.selected_server_id, self.gui.selected_map_id)
+            self.send_request(query)
+
+    def restart_game(self):
+        if self.gui.selected_map_id:
+            # Request to server to restart the game
+            query = pack_query(COMMAND.RESTART_GAME, self.selected_server_id, self.gui.selected_map_id)
+            self.send_request(query)
+
+    def disconnect_from_game(self):
+        if self.gui.selected_map_id:
+            # Request to server to disconnect from game
+            query = pack_query(COMMAND.DISCONNECT_FROM_GAME, self.selected_server_id, self.gui.selected_map_id)
+            self.send_request(query)
+
     # Handlers ========================================================================
     def on_response(self, channel, method, props, body):
 

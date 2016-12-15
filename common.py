@@ -62,12 +62,16 @@ COMMAND = enum(
         YOUR_SHIP_WAS_DAMAGED='22',
 
         # YOUR_SHIP_SANK='23',
-        SOMEONES_SHIP_SANK='24',
+        # SOMEONES_SHIP_SANK='24',
         SOMEONE_MADE_SHOT='25',
         YOUR_TURN_TO_MOVE='26',
         YOU_ARE_KICKED='27',
 
-        SAVE_PLAYER_ID='28'
+        SAVE_PLAYER_ID='28',
+
+        RESTART_GAME='29',
+        GAME_STARTED='30',
+        GAME_FINISHED='31'
     )
 )
 
@@ -170,8 +174,8 @@ def command_to_str(command):
         text = "Notif. Another player damaged my ship"
     # elif command == COMMAND.NOTIFICATION.YOUR_SHIP_SANK:
     #     text = "Notif. My ship sank"
-    elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
-        text = "Notif. Another player damaged another player's ship"
+    # elif command == COMMAND.NOTIFICATION.SOMEONES_SHIP_SANK:
+    #     text = "Notif. Another player damaged another player's ship"
     elif command == COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT:
         text = "Notif. Someone made a shot"
     elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
@@ -180,6 +184,12 @@ def command_to_str(command):
         text = "Notif. You're kicked from the map"
     elif command == COMMAND.NOTIFICATION.SAVE_PLAYER_ID:
         text = "Notif. Save your player_id"
+    elif command == COMMAND.NOTIFICATION.RESTART_GAME:
+        text = "Notif. Restart the game"
+    elif command == COMMAND.NOTIFICATION.GAME_STARTED:
+        text = "Notif. Game finished"
+    elif command == COMMAND.NOTIFICATION.GAME_FINISHED:
+        text = "Notif. Game started"
     return text
 
 
