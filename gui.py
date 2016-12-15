@@ -319,22 +319,22 @@ class GUI(object):
         self.players_l.bind('<<ListboxSelect>>', self.on_player_selection)
 
         # "Start game" button
-        self.start_game_b = Button(self.players_root, state=DISABLED, text="Start game", command=self.on_start_game)
+        self.start_game_b = Button(self.players_root, state=NORMAL, text="Start game", command=self.on_start_game)
         self.start_game_b.pack()
 
-        self.place_ships_b = Button(self.players_root, state=DISABLED, text="Place ships", command=self.on_place_ships)
+        self.place_ships_b = Button(self.players_root, state=NORMAL, text="Place ships", command=self.on_place_ships)
         self.place_ships_b.pack()
 
         # Spectator mode
-        self.spectator_mode_b = Button(self.players_root, state=DISABLED, text="Spectator mode", command=self.client.spectator_mode)
+        self.spectator_mode_b = Button(self.players_root, state=NORMAL, text="Spectator mode", command=self.client.spectator_mode)
         self.spectator_mode_b.pack(padx=5, pady=5)
 
         # Kick player
-        self.kick_player_b = Button(self.players_root, state=DISABLED, text="Kick selected player", command=self.on_kick_player)
+        self.kick_player_b = Button(self.players_root, state=NORMAL, text="Kick selected player", command=self.on_kick_player)
         self.kick_player_b.pack(padx=5, pady=5)
 
         # Restart game button (can be pressed only after game finished)
-        self.restart_game_b = Button(self.players_root, state=DISABLED, text="Restart game", command=self.on_restart_game)
+        self.restart_game_b = Button(self.players_root, state=NORMAL, text="Restart game", command=self.on_restart_game)
         self.restart_game_b.pack()
 
         # Disconnect from the game
@@ -504,7 +504,8 @@ class GUI(object):
                 if event.type == pygame.QUIT:  # If user clicked close
                     self.pygame_done = True  # Flag that we are done so we exit this loop
 
-                elif event.type == pygame.MOUSEBUTTONDOWN and self.my_turn_to_move:
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    # and self.my_turn_to_move
                     # User clicks the mouse. Get the position
                     pos = pygame.mouse.get_pos()
 
@@ -519,9 +520,9 @@ class GUI(object):
 
                     # Request to register shot
                     # Here we need to check that player didn't shot in one cell twice
-                    if cell not in self.players_colors.keys() and cell not in self.shots_colors.keys():
-                        self.client.make_shot(target_row, target_column)
-                        print("Click ", pos, "Grid coordinates: ", target_row, target_column)
+                    # if cell not in self.players_colors.keys() and cell not in self.shots_colors.keys():
+                    self.client.make_shot(target_row, target_column)
+                    print("Click ", pos, "Grid coordinates: ", target_row, target_column)
 
             # Set the screen background
             self.screen.fill(BLACK)
@@ -1044,8 +1045,7 @@ class GUI(object):
         # +
         elif command == COMMAND.START_GAME:
             if resp_code == RESP.OK:
-                with lock:
-                    self.my_turn_to_move = True
+                # with lock:and self.my_turn_to_moverue
 
                 self.add_notification("The game started successfully. Now make your shot!")
 

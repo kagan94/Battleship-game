@@ -207,7 +207,7 @@ def pack_resp(command, resp_code, server_id="", data=""):
     :param data: (list) to pack
     :return: packed elements from the list separated by separator
     '''
-    return SEP.join([command, resp_code, server_id, data])
+    return SEP.join([str(command), str(resp_code), str(server_id), str(data)])
 
 
 def pack_data(data):

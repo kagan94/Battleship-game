@@ -413,30 +413,24 @@ def main():
 
             # Run servers_online window
             # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
-            # gui.choose_server_window()
+            gui.choose_server_window()
 
-            if args.test == 1:
-                client.nickname = '123sa'
-                client.selected_server_id = '2'
-                client.my_player_id = 48
-                gui.selected_map_id = '83'
-                gui.field_size = 20
+            # if args.test == 1:
+            #     client.nickname = '123sa'
+            #     client.selected_server_id = '2'
+            #     client.my_player_id = 48
+            #     gui.selected_map_id = '83'
+            #     gui.field_size = 20
+            #
+            # else:
+            #     client.nickname = 'ff'
+            #     client.selected_server_id = '2'
+            #     client.my_player_id = 49
+            #     gui.selected_map_id = '83'
+            #     gui.field_size = 20
+            #
+            # client.join_game()
 
-            else:
-                client.nickname = 'ff'
-                client.selected_server_id = '2'
-                client.my_player_id = 49
-                gui.selected_map_id = '83'
-                gui.field_size = 20
-
-            client.join_game()
-
-            # gui.run_game()
-
-            # client.create_new_game("abc game")
-            # client.make_shot(map_id='74', target_row='2', target_column='2')
-            # client.join_game(map_id='74')
-            # client.place_ships(map_id='74')
         else:
             # Launch GUI window to enter nickname (Ask player to enter his nickname)
             gui.nickname_window()

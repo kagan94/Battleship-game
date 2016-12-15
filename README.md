@@ -1,5 +1,7 @@
 # Battleship-game
 
+![SQL db scatch](http://clip2net.com/clip/m527982/a20a7-clip-185kb.png)
+
 ## Already DONE:
 * Establishment of sql connection + created basic structure of DB + created models for DB (server)
 * register_nickname. If nickname doesn't exist, register it in DB (server)
@@ -39,8 +41,6 @@
 * spectator mode (GUI)
 * remove double-click (as triger) on the same coordinate on the field that user can click only once on one coordinate (GUI)
 * Remove glitch with window freezeing while waiting for the response (Maybe through using separate Thread for GUI) (GUI)
-
-
 * PLAYER_JOINED_TO_GAME
 * YOUR_SHIP_WAS_DAMAGED
 * SOMEONE_MADE_SHOT

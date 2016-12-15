@@ -47,7 +47,7 @@ def DELETE_ALL_QUEUES():
     connection.close()
     print "All queues were deleted"
 
-# DELETE_ALL_QUEUES()
+DELETE_ALL_QUEUES()
 
 
 def check_db_connection():
@@ -426,9 +426,9 @@ class Main_Server(object):
                 data = pack_data([map_id, m.owner_id])
 
                 # Put notification about game end into the RabbitMQ
-                for record in all_players:
-                    query = pack_resp(COMMAND.NOTIFICATION.GAME_FINISHED, RESP.OK, self.server_id, data)
-                    self.send_response(nickname=record.player.nickname, query=query)
+                # for record in all_players:
+                #     query = pack_resp(COMMAND.NOTIFICATION.GAME_FINISHED, RESP.OK, self.server_id, data)
+                #     self.send_response(nickname=record.player.nickname, query=query)
 
 
             # TODO: if shot was successful, check is the game ended and change var "is_game_end"
