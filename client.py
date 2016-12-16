@@ -295,6 +295,7 @@ class Client(object):
 
     def disconnect_from_game(self):
         if self.gui.selected_map_id:
+
             # Request to server to disconnect from game
             query = pack_query(COMMAND.DISCONNECT_FROM_GAME, self.selected_server_id, self.gui.selected_map_id)
             self.send_request(query)
@@ -302,7 +303,7 @@ class Client(object):
     # Handlers ========================================================================
     def on_response(self, channel, method, props, body):
 
-        print body
+        # print body
         # Put the task from the server into the queue (GUI should process it
         # It needs to avoid blocking some methods, because this function is running in thread
         with lock:
@@ -316,6 +317,7 @@ class Client(object):
     #############
     def notifications_loop(self, host, login, password, virtual_host):
         ''' Open new RabbitMQ connection to receive notifications '''
+        # TODO: Uncomment it in final version
         # try:
         if 1:
             print "- Start establishing connection to RabbitMQ server."
@@ -411,9 +413,8 @@ def main():
             request_queue = 'req_' + client.nickname
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)
 
-            # Run servers_online window
             # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
-            # gui.choose_server_window()
+
 
             if args.test == 1:
                 client.nickname = '123sa'
@@ -429,14 +430,11 @@ def main():
                 gui.selected_map_id = '83'
                 gui.field_size = 20
 
-            client.join_game()
+            # Run servers_online window
+            gui.choose_server_window()
 
-            # gui.run_game()
+            # client.join_game()
 
-            # client.create_new_game("abc game")
-            # client.make_shot(map_id='74', target_row='2', target_column='2')
-            # client.join_game(map_id='74')
-            # client.place_ships(map_id='74')
         else:
             # Launch GUI window to enter nickname (Ask player to enter his nickname)
             gui.nickname_window()

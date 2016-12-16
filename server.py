@@ -47,7 +47,7 @@ def DELETE_ALL_QUEUES():
     connection.close()
     print "All queues were deleted"
 
-# DELETE_ALL_QUEUES()
+DELETE_ALL_QUEUES()
 
 
 def check_db_connection():
@@ -291,7 +291,7 @@ class Main_Server(object):
 
         for s in shots_query:
             # Compress data
-            if s.hit:
+            if s.hit == "1":
                 # print "sss, ", s.hit
                 damaged_player_id = self.get_damaged_player_id_by_shot(map_id, s.row, s.column)
             else:
@@ -331,14 +331,99 @@ class Main_Server(object):
             # Put notification into the queue
             self.send_response(nickname=record.player.nickname, query=query)
 
-    def notify_about_ship_damage(self, map_id, initiator_id, target_player_name, target_row, target_column):
-        ''' Send notification to damaged player '''
+    @refresh_db_connection
+    def is_game_end(self, map_id):
+        def remaining_players_on_map(map_id):
+            '''
+            :param map_id: (str)
+            :return: (list) of players_ids which are still playing on the map
+                     (Means have ships on the map, which are not destroyed)
+            '''
 
-        data = pack_data([map_id, initiator_id, target_row, target_column])
-        query = pack_resp(COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED, RESP.OK, self.server_id, data)
+            query = Ship_to_map.select(Ship_to_map.player_id).distinct().where(
+                Ship_to_map.map == map_id,
+                Ship_to_map.totally_sank == "0"
+            )
 
-        # Put notification into the queue
-        self.send_response(nickname=target_player_name, query=query)
+            # Return list of remaining_players
+            return [record.player_id for record in query]
+
+        remaining_players = remaining_players_on_map(map_id)
+
+        query = Player_to_map.select().distinct().where(
+            Player_to_map.map == map_id,
+            Player_to_map.player << remaining_players
+        )
+
+        game_end = False
+
+        if query.count() < 2:
+            game_end = True
+
+        return game_end
+
+    @refresh_db_connection
+    def find_next_player(self, map_id, current_player_id):
+        '''
+        Find next player, by current player_id.
+
+        :param map_id: (str)
+        :param current_player_id: (str)
+        :return: next_player_id(int), next_player_nickname (str)
+        '''
+
+        players = Player_to_map.select().where(Player_to_map.map == map_id).order_by(Player_to_map.id)
+
+        players_nicknames = [p.player.nickname for p in players]
+        players = [p.player_id for p in players]
+
+        try:
+            key = players.index(current_player_id)
+        except ValueError:
+            return None, None
+
+        # if it was the last player, then choose the 1st
+        if key + 1 >= len(players):
+            next_player_id = players[0]
+            next_player_nickname = players_nicknames[0]
+
+        # Otherwise, choose next player
+        else:
+            next_player_id = players[key + 1]
+            next_player_nickname = players_nicknames[key + 1]
+
+        return next_player_id, next_player_nickname
+
+    @refresh_db_connection
+    def kick_player(self, map_id, player_id_to_kick):
+        '''
+        :param map_id:
+        :param player_id_to_kick:
+        :return: resp_code, player_nickname
+        '''
+        resp_code, player_nickname = RESP.OK, ""
+
+        query = Player_to_map.select().where(
+            Player_to_map.player == player_id_to_kick,
+            Player_to_map.map == map_id
+        )
+
+        if query.count():
+            player_nickname = query.get().player.nickname
+
+            # Delete record from DB
+            query.delete_instance()
+
+            # send notification to player that was kicked
+            query = pack_resp(COMMAND.NOTIFICATION.YOU_ARE_KICKED, RESP.OK, self.server_id, data=map_id)
+            self.send_response(nickname=player_nickname, query=query)
+
+            # TODO: Add notification to other players that this player was kicked
+
+        else:
+            resp_code = RESP.PLAYER_ALREADY_KICKED
+
+        return resp_code, player_id_to_kick
 
     @refresh_db_connection
     def make_hit(self, map_id, player_id, target_row, target_column):
@@ -353,6 +438,8 @@ class Main_Server(object):
         # is_game_end can be "0" or "1"
         resp_code, hit, is_game_end = RESP.OK, "0", ""
         damaged_player_id = ""
+
+        hit_record = None
 
         # Map doesn't exist
         if not self.map_exists(map_id):
@@ -379,40 +466,63 @@ class Main_Server(object):
                                                    Ship_to_map.column_start <= target_column,
                                                    Ship_to_map.column_end >= target_column)
             try:
-                record = hit_query.get()
+                hit_record = hit_query.get()
                 hit = "1"
 
                 # Notify player whose ship was damaged
                 self.notify_about_ship_damage(map_id,
                                               initiator_id=player_id,
-                                              target_player_name=record.player.nickname,
+                                              target_player_name=hit_record.player.nickname,
                                               target_row=target_row,
                                               target_column=target_column)
 
                 # Player who was damaged
-                damaged_player_id = record.player.player_id
-
-                # self.notify_about_ship_damage(map_id,
-                #                               initiator_id=player_id,
-
-                # TODO: Notify about next move COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE (player_id)
+                damaged_player_id = hit_record.player.player_id
 
             # Nobody was damaged
             except Ship_to_map.DoesNotExist:
                 pass
 
             # Register hit in DB
-            Player_hits.create(map=map_id, player=player_id,
-                               row=int(target_row), column=int(target_column),
-                               hit=hit)
+            shot_query = Player_hits(map=map_id, player=player_id,
+                                     row=int(target_row), column=int(target_column),
+                                     hit=hit)
+            shot_query.save()
 
-            # Notify other players about this shot
+            #######################################
+            # Notify next player about his turn
+            if hit == "0":
+                next_player_id, next_player_nickname = self.find_next_player(map_id, current_player_id=player_id)
+
+                if next_player_id is not None:
+                    query = pack_resp(COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE, RESP.OK, self.server_id)
+                    self.send_response(nickname=next_player_nickname, query=query)
+
+            # Check whether the shot completely destroyed ship or not
+            # Here we mark ship as totally sank
+            else:
+                # Update location of the shot that caused damage
+                shot_query.ship_location_id = hit_record.location_id
+                shot_query.save()
+
+                # Get damaged ship record
+                damaged_ship_record = Ship_to_map.get(location_id=hit_record.location_id)
+                ship_size = damaged_ship_record.ship_type
+
+                # Get all shots in this ship
+                all_shots_in_ship = Player_hits.select().where(Player_hits.ship_location_id == hit_record.location_id)
+
+                # Update saved shot in case the ship was totally destroyed
+                if all_shots_in_ship.count() >= ship_size:
+                    damaged_ship_record.totally_sank = 1
+                    damaged_ship_record.save()
+
+            #######################################
+            # Notify other players about this shot in any case
             self.another_player_made_shot(map_id, player_id, target_row, target_column, damaged_player_id)
 
-
-            # Ship_to_map.totally_sank !!!!!!!!!!!!!
-
-            game_finished = "1"  # ??????
+            # is_game_end() return True/False
+            game_finished = self.is_game_end(map_id)
 
             # If game finished, notify all players about it
             if game_finished:
@@ -430,42 +540,55 @@ class Main_Server(object):
                     query = pack_resp(COMMAND.NOTIFICATION.GAME_FINISHED, RESP.OK, self.server_id, data)
                     self.send_response(nickname=record.player.nickname, query=query)
 
-
-            # TODO: if shot was successful, check is the game ended and change var "is_game_end"
-
-
-            # TODO: Check whether ship is completely sank, then send argument "completely_sank" to player who made shot
-
-            # TODO: if ship sank, send notification to damaged player
-            # TODO: notify next player if hit = 0
-
         return resp_code, hit, damaged_player_id
 
-    def notify_about_kick(self, map_id, player_nickname):
-        ''' This player will be kicked now '''
+    @refresh_db_connection
+    def kick_player(self, map_id, player_id_to_kick):
+        '''
+        :param map_id:
+        :param player_id_to_kick:
+        :return: resp_code, player_nickname
+        '''
+        resp_code, player_nickname = RESP.OK, ""
 
-        query = pack_resp(COMMAND.NOTIFICATION.YOU_ARE_KICKED, RESP.OK, self.server_id, data=map_id)
+        query = Player_to_map.select().where(
+            Player_to_map.player == player_id_to_kick,
+            Player_to_map.map == map_id
+        )
 
-        # Put notification into the queue
-        self.send_response(nickname=player_nickname, query=query)
+        if query.count():
+            player = query.get()
+            player_nickname = player.player.nickname
+
+            # Delete record from DB
+            player.delete_instance()
+
+            # send notification to player that was kicked
+            query = pack_resp(COMMAND.NOTIFICATION.YOU_ARE_KICKED, RESP.OK, self.server_id, data=map_id)
+            self.send_response(nickname=player_nickname, query=query)
+
+            # TODO: Add notification to other players that this player was kicked
+
+        else:
+            resp_code = RESP.PLAYER_ALREADY_KICKED
+
+        return resp_code, player_id_to_kick
 
     @refresh_db_connection
     def start_game(self, initiator_id, map_id):
         ''' Map creator triggered to start game '''
         resp_code = RESP.OK
 
-        players_query = Player_to_map.select(Player_to_map.player).where(
-            Player_to_map.player.not_in(
-                Ship_to_map.select(Ship_to_map.player_id).where(
-                    Ship_to_map.map == Player_to_map.map
-                )
-            ),
-            Player_to_map.map_id == 83
-        )
         current_map = Map.select().where(Map.map_id == map_id).get()
+        all_players = Player_to_map.select().where(Player_to_map.map == map_id)
+        # TODO: add check that there should be at least 2 people on the map before the game can start
+
+        # Not enough players to start the game
+        if all_players.count() < 2:
+            resp_code = RESP.NOT_ENOUGH_PLAYERS
 
         # If game has not been started yet
-        if not current_map.game_started:
+        elif not current_map.game_started:
             normal_players = Player_to_map.select().where(
                 Player_to_map.player.in_(
                     Ship_to_map.select(Ship_to_map.player_id).where(
@@ -520,16 +643,23 @@ class Main_Server(object):
         resp_code, map_id = RESP.OK, ""
 
         # Check that map with the same name doesn't exist in DB
-        if Map.select().where(Map.name == name,
-                              Map.server == self.server_id).count() == 0:
+        if Map.select().where(Map.name == name, Map.server == self.server_id).count() == 0:
+
+            # 120 - is the number of cells needed to place all ships for 1 player
+            max_players = (int(size) ** 2) / 120
+
             # Create new map
-            Map.create(owner=owner_id, server=self.server_id, name=name, size=size)
+            Map.create(owner=owner_id, server=self.server_id, name=name, size=size, max_players=max_players)
             map_id = Map.select().order_by(Map.map_id.desc()).get().map_id
+
+            # Add player to map and mark that it's his turn to move
+            Player_to_map.create(map=map_id, player=owner_id, my_turn=1)
 
         else:
             resp_code = RESP.MAP_NAME_ALREADY_EXISTS
 
-        return resp_code, str(map_id)
+        data = pack_data([map_id, name, size])
+        return resp_code, data
 
     @refresh_db_connection
     def join_game(self, map_id, player_id, player_nickname):
@@ -543,42 +673,83 @@ class Main_Server(object):
         '''
         resp_code = RESP.OK
 
+        my_turn = "0"
+        ships_already_placed = "0"
+        game_already_started = "0"
+        owner_id = ""
+
+        game_started = Map.select().where(
+            Map.map_id == map_id,
+            Map.server == self.server_id,
+            Map.game_started == 1
+        ).count() > 0
+
+        # Query to check does player already place his ships
+        ships_placed = Ship_to_map.select().where(
+            Ship_to_map.map == map_id,
+            Ship_to_map.player == player_id
+        ).count() > 0
+
+        already_joined = Player_to_map.select().where(
+            Player_to_map.map == map_id,
+            Player_to_map.player == player_id
+        )
+
         # Map doesn't exist
         if not self.map_exists(map_id):
             resp_code = RESP.MAP_DOES_NOT_EXIST
 
-        # Game session already started on requested map
-        elif Map.select().where(Map.map_id == map_id,
-                                Map.server == self.server_id,
-                                Map.game_started == 1).count() > 0:
-            resp_code = RESP.GAME_ALREADY_STARTED
-
-        # Player already joined this map
-        elif Player_to_map.select().where(Player_to_map.map == map_id,
-                                          Player_to_map.player == player_id).count() > 0:
-            # resp_code = RESP.OK
-            resp_code = RESP.ALREADY_JOINED_TO_MAP
-
-        # Add player to the requested map
+        # TODO: Add check on spectator mode
         else:
-            Player_to_map.create(map_id=map_id, player=player_id)
+            map_info = Map.get(Map.map_id == map_id, Map.server == self.server_id)
+            owner_id = map_info.owner.player_id
 
-            try:
-                map_creator = Map.select().where(Map.map_id == map_id,
-                                                 Map.server == self.server_id).get()
+            # All players on this map
+            all_players = Player_to_map.select().where(Player_to_map.map == map_id)
 
-                # Check that current player and creator of the map are different players
-                if map_creator.owner.player_id != player_id:
-                    data = pack_data([player_id, player_nickname])
+            if ships_placed:
+                ships_already_placed = "1"
 
-                    # Notify admin about joining a new player
-                    query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME, RESP.OK, data)
-                    self.send_response(map_creator.owner.nickname, query)
+            ###########
+            # Game started (negative response)
+            if game_started and not already_joined.count() > 0:
+                resp_code = RESP.GAME_ALREADY_STARTED
 
-            except Map.DoesNotExist:
-                pass
+            elif game_started and already_joined.count() > 0:
+                resp_code = RESP.ALREADY_JOINED_TO_MAP
+                game_already_started = "1"
 
-        return resp_code
+                self.mark_player_as_connected(map_id, player_id)
+
+                if already_joined.get().my_turn:
+                    my_turn = "1"
+
+            ###########
+            # Game didn't started
+            elif not game_started and already_joined.count() > 0:
+                self.mark_player_as_connected(map_id, player_id)
+
+            elif not game_started and not already_joined.count() > 0:
+
+                # Exceeding limit of players
+                if map_info.max_players >= all_players.count() + 1:
+                    resp_code = RESP.MAP_FULL
+
+                # Add player to the map
+                # (Player hasn't joined this map yet)
+                else:
+                    Player_to_map.create(map_id=map_id, player=player_id)
+
+                    # Notify all players (except this) about joining to the map
+                    # Check that current player and creator of the map are different players
+                    for record in all_players:
+                        if record.player.player_id != player_id:
+                            query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME,
+                                              RESP.OK, data=pack_data([player_id, player_nickname]))
+                            self.send_response(record.player.nickname, query)
+
+        data = pack_data([my_turn, ships_already_placed, game_already_started, owner_id])
+        return resp_code, data
 
     @refresh_db_connection
     def list_of_maps(self):
@@ -589,8 +760,8 @@ class Main_Server(object):
         maps_data = []
 
         # Get all games which have not been started yet
-        maps_query = Map.select().where(Map.server == self.server_id,
-                                        Map.game_started == 0)
+        maps_query = Map.select().where(Map.server == self.server_id)
+                                        # Map.game_started == 0)
 
         for m in maps_query:
             # Compress data
@@ -630,7 +801,7 @@ class Main_Server(object):
 
         # Get all players on map except who requested this command
         players_query = Player_to_map.select().where(Player_to_map.map == map_id,
-                                                  Player_to_map.player != player_id)
+                                                     Player_to_map.player != player_id)
 
         for p in players_query:
             # Compress data
@@ -662,6 +833,42 @@ class Main_Server(object):
         data = pack_data(ships_data)
         return resp_code, data
 
+    @refresh_db_connection
+    def disconnect_from_game(self, map_id, player_id):
+        ''' Player can be disconnected, but he/she continues to play '''
+        resp_code = RESP.OK
+
+        Player_to_map.update(disconnected=1)\
+            .where(Player_to_map.map == map_id, Player_to_map.player == player_id).execute()
+
+        return resp_code
+
+    @refresh_db_connection
+    def mark_player_as_connected(self, map_id, player_id):
+        ''' Mark player as connected '''
+        Player_to_map.update(disconnected=0)\
+            .where(Player_to_map.map == map_id, Player_to_map.player == player_id).execute()
+
+    ###################
+    # Notifications
+    ###################
+    def notify_about_ship_damage(self, map_id, initiator_id, target_player_name, target_row, target_column):
+        ''' Send notification to damaged player '''
+
+        data = pack_data([map_id, initiator_id, target_row, target_column])
+        query = pack_resp(COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED, RESP.OK, self.server_id, data)
+
+        # Put notification into the queue
+        self.send_response(nickname=target_player_name, query=query)
+
+    def notify_about_kick(self, map_id, player_nickname):
+        ''' This player will be kicked now '''
+
+        query = pack_resp(COMMAND.NOTIFICATION.YOU_ARE_KICKED, RESP.OK, self.server_id, data=map_id)
+
+        # Put notification into the queue
+        self.send_response(nickname=player_nickname, query=query)
+
     ###################
     # Handlers for queue ===================================================================================
     ###################
@@ -688,7 +895,7 @@ class Main_Server(object):
 
         :param ch: channel
         :param method: -
-        :param props: -
+        :param props: (properties)
         :param body: message
         '''
 
@@ -715,13 +922,13 @@ class Main_Server(object):
         elif command == COMMAND.CREATE_NEW_GAME:
             game_name, field_size = parse_data(data)
 
-            resp_code, map_id = self.create_new_map(owner_id=player_id, name=game_name, size=field_size)
-            query = pack_resp(command, resp_code, self.server_id, data=map_id)
+            resp_code, data = self.create_new_map(owner_id=player_id, name=game_name, size=field_size)
+            query = pack_resp(command, resp_code, self.server_id, data)
 
         # +
         elif command == COMMAND.JOIN_EXISTING_GAME:
-            resp_code = self.join_game(map_id=data, player_id=player_id, player_nickname=nickname)
-            query = pack_resp(command, resp_code, self.server_id)
+            resp_code, data = self.join_game(map_id=data, player_id=player_id, player_nickname=nickname)
+            query = pack_resp(command, resp_code, self.server_id, data)
 
         # +
         elif command == COMMAND.PLACE_SHIPS:
@@ -739,7 +946,10 @@ class Main_Server(object):
             query = pack_resp(command, resp_code, self.server_id, data)
 
         elif command == COMMAND.DISCONNECT_FROM_GAME:
-            pass
+            map_id = data
+
+            resp_code = self.disconnect_from_game(map_id, player_id)
+            query = pack_resp(command, resp_code, self.server_id, data=map_id)
 
         elif command == COMMAND.QUIT_FROM_GAME:
             pass
@@ -754,8 +964,12 @@ class Main_Server(object):
         elif command == COMMAND.RESTART_GAME:
             pass
 
+        # +
         elif command == COMMAND.KICK_PLAYER:
-            pass
+            map_id, player_id_to_kick = parse_data(data)
+
+            resp_code, player_id_to_kick = self.kick_player(map_id, player_id_to_kick)
+            query = pack_resp(command, RESP.OK, self.server_id, data=player_id_to_kick)
 
         # +
         elif command == COMMAND.PLAYERS_ON_MAP:

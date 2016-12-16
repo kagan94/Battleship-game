@@ -24,10 +24,6 @@ SEP_DATA = ":"
 def enum(**vals):
     return type('Enum', (), vals)
 
-GAME_COMMAND = enum(
-    PLACE_SHIPS = '1',
-
-)
 
 COMMAND = enum(
     REGISTER_NICKNAME='1',
@@ -87,7 +83,13 @@ RESP = enum(
     GAME_ALREADY_STARTED='6',
     ALREADY_JOINED_TO_MAP='7',
 
-    LACK_OF_PLACE_FOR_SHIPS='8'
+    MAP_FULL='8',
+
+    SHIPS_ARE_NOT_PLACED='9',  # when player joined to map, ships are not placed
+
+    LACK_OF_PLACE_FOR_SHIPS='10',
+    PLAYER_ALREADY_KICKED='11',
+    NOT_ENOUGH_PLAYERS='12'  # not enough players to start the game
 )
 
 
@@ -119,6 +121,10 @@ def error_code_to_string(err_code):
         err_text = "You already joined to requested map"
     elif err_code == RESP.LACK_OF_PLACE_FOR_SHIPS:
         err_text = "There's no place to locate all ships"
+    elif err_code == RESP.PLAYER_ALREADY_KICKED:
+        err_text = "Requested player is already kicked"
+    elif err_code == RESP.NOT_ENOUGH_PLAYERS:
+        err_text = "Not enough players to start the game"
     return err_text
 
 
@@ -207,7 +213,7 @@ def pack_resp(command, resp_code, server_id="", data=""):
     :param data: (list) to pack
     :return: packed elements from the list separated by separator
     '''
-    return SEP.join([command, resp_code, server_id, data])
+    return SEP.join([str(command), str(resp_code), str(server_id), str(data)])
 
 
 def pack_data(data):

@@ -44,11 +44,12 @@ class Map(BaseModel):
     name = CharField()
     size = IntegerField()
     game_started = IntegerField()
+    max_players = IntegerField()
 
     def __str__(self):
-        return "Map_id:%s, server_name:%s, owner:%s, map_name:%s, size:%s, game_started: %s"\
+        return "Map_id:%s, server_name:%s, owner:%s, map_name:%s, size:%s, game_started:%s, map_players:%s"\
                % (self.map_id, self.server.name, self.owner,
-                  self.name, self.size, self.game_started)
+                  self.name, self.size, self.game_started, self.max_players)
 
 
 class Player_to_map(BaseModel):
@@ -57,10 +58,11 @@ class Player_to_map(BaseModel):
     player = ForeignKeyField(Player, related_name="maps")  # user's playing on these maps
     time_connected = DateTimeField(default=datetime.datetime.now)
     disconnected = IntegerField()
+    my_turn = IntegerField()
 
     def __str__(self):
-        return "Id:%s, Map_id:%s, player:%s, time_connected:%s, disconnected:%s"\
-               % (self.id, self.map_id, self.player.nickname, self.time_connected, self.disconnected)
+        return "Id:%s, Map_id:%s, player:%s, time_connected:%s, disconnected:%s, my_turn:%s"\
+               % (self.id, self.map_id, self.player.nickname, self.time_connected, self.disconnected, self.my_turn)
 
     # class Meta:
     #     primary_key = CompositeKey('map', 'player')
