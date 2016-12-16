@@ -537,8 +537,9 @@ class Main_Server(object):
 
                 # Put notification about game end into the RabbitMQ
                 for record in all_players:
-                    query = pack_resp(COMMAND.NOTIFICATION.GAME_FINISHED, RESP.OK, self.server_id, data)
-                    self.send_response(nickname=record.player.nickname, query=query)
+                    if record.player.player_id != player_id:
+                        query = pack_resp(COMMAND.NOTIFICATION.GAME_FINISHED, RESP.OK, self.server_id, data)
+                        self.send_response(nickname=record.player.nickname, query=query)
 
         return resp_code, hit, damaged_player_id
 

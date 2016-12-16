@@ -506,7 +506,8 @@ class GUI(object):
                 if event.type == pygame.QUIT:  # If user clicked close
                     self.pygame_done = True  # Flag that we are done so we exit this loop
 
-                elif event.type == pygame.MOUSEBUTTONDOWN and self.my_turn_to_move:
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    # and self.my_turn_to_move
                     # User clicks the mouse. Get the position
                     pos = pygame.mouse.get_pos()
 
@@ -521,9 +522,12 @@ class GUI(object):
 
                     # Request to register shot
                     # Here we need to check that player didn't shot in one cell twice
+
                     # print cell, self.players_colors.keys(), self.shots_colors.keys()
 
-                    if cell not in self.players_colors.keys() and cell not in self.shots_colors.keys():
+                    if cell not in self.players_colors.keys()\
+                            and cell not in self.shots_colors.keys()\
+                            and self.my_turn_to_move:
                         # Change state for my turn, until something will arrive from the server
                         with lock:
                             self.my_turn_to_move = False
@@ -1149,8 +1153,7 @@ class GUI(object):
         # +
         elif command == COMMAND.START_GAME:
             if resp_code == RESP.OK:
-                with lock:
-                    self.my_turn_to_move = True
+                # with lock:and self.my_turn_to_moverue
 
                 # Block buttons "place ships"
                 self.place_ships_b.config(state=DISABLED)

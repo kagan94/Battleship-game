@@ -414,6 +414,7 @@ def main():
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)
 
             # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
+<<<<<<< HEAD
 
 
             if args.test == 1:
@@ -433,6 +434,24 @@ def main():
             # Run servers_online window
             gui.choose_server_window()
 
+=======
+            gui.choose_server_window()
+
+            # if args.test == 1:
+            #     client.nickname = '123sa'
+            #     client.selected_server_id = '2'
+            #     client.my_player_id = 48
+            #     gui.selected_map_id = '83'
+            #     gui.field_size = 20
+            #
+            # else:
+            #     client.nickname = 'ff'
+            #     client.selected_server_id = '2'
+            #     client.my_player_id = 49
+            #     gui.selected_map_id = '83'
+            #     gui.field_size = 20
+            #
+>>>>>>> origin/master
             # client.join_game()
 
         else:
