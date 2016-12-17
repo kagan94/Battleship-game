@@ -508,8 +508,10 @@ class GUI(object):
         # -------- Main Program Loop -----------
         while not self.pygame_done:
             for event in pygame.event.get():  # User did something
+
                 if event.type == pygame.QUIT:  # If user clicked close
-                    self.pygame_done = True  # Flag that we are done so we exit this loop
+                    self.on_disconnect()  # Flag that we are done so we exit this loop
+                    # self.pygame_done = True
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     # and self.my_turn_to_move
@@ -844,11 +846,12 @@ class GUI(object):
 
     def on_quit(self):
         ''' Player wants to quit from the game. Should redirect to maps '''
-        with lock:
-            self.pygame_done = True
+        # with lock:
+        #     self.pygame_done = True
+
+        self.client.quit_from_game()
 
         # self.destroy_previous_root()
-        self.choose_map_window()
 
     #############################################
     # Other methods
@@ -919,7 +922,7 @@ class GUI(object):
 
             # Find player in list by his nickname
             for i, el in enumerate(all_maps):
-                if el == map_name:
+                if el.strip() == map_name:
                     pos_in_list = i
                     break
 
@@ -1245,6 +1248,10 @@ class GUI(object):
                 self.choose_map_window()
 
             elif resp_code == RESP.SHOT_WAS_ALREADY_MADE_HERE:
+                # Allow user to make a shot again
+                with lock:
+                    self.my_turn_to_move = True
+
                 self.add_notification("Shot was already made here")
 
             elif resp_code == RESP.OK:
@@ -1280,7 +1287,7 @@ class GUI(object):
 
                 self.selected_map_id, self.selected_map = None, None
 
-                # Redirect player to another window
+                # Redirect player to "choose map" window
                 self.choose_map_window()
                 self.add_notification("You disconnected successfully")
 
@@ -1293,7 +1300,9 @@ class GUI(object):
             with lock:
                 self.pygame_done = True
 
-            self.add_notification("You quited successfully from map \"%s\"" % map_name)
+            # Redirect player to "choose map" window
+            self.choose_map_window()
+            self.add_notification("You quitted successfully from map \"%s\"" % map_name)
 
         # +
         elif command == COMMAND.START_GAME:
@@ -1306,6 +1315,13 @@ class GUI(object):
                 self.place_ships_b.config(state=DISABLED)
 
                 self.add_notification("The game started successfully. Now make your shot!")
+
+            elif resp_code == RESP.NOT_ENOUGH_PLAYERS_WITH_PLACED_SHIPS:
+                # Unblock "Start game" button
+                self.start_game_b.config(state=NORMAL)
+
+                self.add_notification("Not enough players with placed ships to start the game"
+                                      "(needs at least 2 players in total with placed ships)!")
 
             else:
                 # Unblock "Start game" button
@@ -1559,7 +1575,7 @@ class GUI(object):
                 with lock:
                     self.pygame_done = True
 
-                tkMessageBox.showinfo("Kicked", "You was kicked from the map" % map_name)
+                tkMessageBox.showinfo("Kicked", "You were kicked from the map %s" % map_name)
 
                 self.choose_map_window()
 

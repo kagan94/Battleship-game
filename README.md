@@ -61,7 +61,6 @@
 * add check that there should be at least 2 people on the map before the game can start (start_game method on server)
 * send notification when another player disconnected
 * restart_game (server, gui)
-
 * change admin when admin quitted
 * update turn in DB when admin quitted
 * assign new admin when admin quitted

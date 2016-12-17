@@ -311,9 +311,14 @@ class Client(object):
 
     def disconnect_from_game(self):
         if self.gui.selected_map_id:
-
             # Request to server to disconnect from game
             query = pack_query(COMMAND.DISCONNECT_FROM_GAME, self.selected_server_id, self.gui.selected_map_id)
+            self.send_request(query)
+
+    def quit_from_game(self):
+        if self.gui.selected_map_id:
+            # Request to server to disconnect from game
+            query = pack_query(COMMAND.QUIT_FROM_GAME, self.selected_server_id, self.gui.selected_map_id)
             self.send_request(query)
 
     # Handlers ========================================================================

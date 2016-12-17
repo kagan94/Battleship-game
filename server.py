@@ -279,7 +279,7 @@ class Main_Server(object):
         shots_data = []
 
         # Get all games which have not been started yet
-        shots_query = Player_hits.select().where(Player_hits.map)
+        shots_query = Player_hits.select().where(Player_hits.map == map_id)
 
         for s in shots_query:
             # Compress data
@@ -311,7 +311,7 @@ class Main_Server(object):
                 ~(Player_to_map.player << [initiator_id, damaged_player_id]),
                 Player_to_map.disconnected == 0)
 
-        print "SOMEONE_MADE_SHOT", players_on_map_query.count()
+        # print "SOMEONE_MADE_SHOT", players_on_map_query.count()
 
         # Send notification about this move
         for record in players_on_map_query:
@@ -568,14 +568,15 @@ class Main_Server(object):
 
             # If game finished, notify all players about it
             if game_finished:
-                m = Map.select().where(Map.map_id == map_id).get()
+                map_info = Map.get(Map.map_id == map_id)
 
                 # Mark that the map as finished (code = 2)
-                m.game_started = 2
-                m.save()
+                map_info_inst = map_info
+                map_info_inst.game_started = 2
+                map_info_inst.save()
 
                 all_players = Player_to_map.select().where(Player_to_map.map == map_id)
-                data = pack_data([map_id, m.name. m.owner_id])
+                data = pack_data([map_id, map_info.name. map_info.owner_id])
 
                 # Put notification about game end into the RabbitMQ
                 for record in all_players:
@@ -630,9 +631,16 @@ class Main_Server(object):
             Player_to_map.spectator_mode == 0
         )
 
+        total_players_with_placed_ships = Ship_to_map.select().distinct(Ship_to_map.player).where(
+                    Ship_to_map.map == map_id
+        ).count()
+
         # Not enough players to start the game
         if all_players.count() < 2:
             resp_code = RESP.NOT_ENOUGH_PLAYERS
+
+        elif total_players_with_placed_ships < 2:
+            resp_code = RESP.NOT_ENOUGH_PLAYERS_WITH_PLACED_SHIPS
 
         # If game has not been started yet
         elif not current_map.game_started:
@@ -643,7 +651,9 @@ class Main_Server(object):
                     )
                 ),
                 Player_to_map.map_id == map_id,
-                Player_to_map.player != initiator_id
+                Player_to_map.player != initiator_id,
+                Player_to_map.kicked == 0,
+                Player_to_map.spectator_mode == 0
             )
 
             # These players will start to play now
@@ -1073,12 +1083,12 @@ class Main_Server(object):
         :param map_id: (str)
         :param player_id: (str) - if player id is not specified, all ships will be removed
         '''
-        query = Player_hits.select().where(Player_hits.map == map_id)
+        query = Player_hits.delete().where(Player_hits.map == map_id)
 
         if player_id:
             query = query.where(Player_hits.player == player_id)
 
-        query.delete_instance()
+        query.execute()
 
     @refresh_db_connection
     def remove_all_ships(self, map_id, player_id=None):
@@ -1088,12 +1098,12 @@ class Main_Server(object):
         :param map_id: (str)
         :param player_id: (str) - if player id is not specified, all ships will be removed
         '''
-        query = Ship_to_map.select().where(Ship_to_map.map == map_id)
+        query = Ship_to_map.delete().where(Ship_to_map.map == map_id)
 
         if player_id:
             query = query.where(Player_to_map.player == player_id)
 
-        query.delete_instance()
+        query.execute()
 
     ###################
     # Notifications
@@ -1206,34 +1216,6 @@ class Main_Server(object):
             query = pack_resp(command, resp_code, self.server_id, data)
 
         # +
-        elif command == COMMAND.DISCONNECT_FROM_GAME:
-            map_id = data
-
-            resp_code = self.disconnect_from_game(map_id, player_id, nickname)
-            query = pack_resp(command, resp_code, self.server_id, data=map_id)
-
-        # +
-        elif command == COMMAND.QUIT_FROM_GAME:
-            map_id = data
-
-            resp_code, data = self.quit_from_game(map_id, player_id, nickname)
-            query = pack_resp(command, resp_code, self.server_id, data)
-
-        # +
-        elif command == COMMAND.START_GAME:
-            map_id = data
-
-            resp_code = self.start_game(player_id, map_id)
-            query = pack_resp(command, resp_code, self.server_id, map_id)
-
-        # +
-        elif command == COMMAND.RESTART_GAME:
-            map_id = data
-
-            resp_code, data = self.restart_game(map_id)
-            query = pack_resp(command, resp_code, self.server_id, data)
-
-        # +
         elif command == COMMAND.KICK_PLAYER:
             map_id, player_id_to_kick = parse_data(data)
 
@@ -1264,6 +1246,34 @@ class Main_Server(object):
             # Usually after connecting to existing game, player sends this command
             data = self.existing_shots(map_id=data)
             query = pack_resp(command, RESP.OK, self.server_id, data)
+
+        # +
+        elif command == COMMAND.START_GAME:
+            map_id = data
+
+            resp_code = self.start_game(player_id, map_id)
+            query = pack_resp(command, resp_code, self.server_id, map_id)
+
+        # +
+        elif command == COMMAND.RESTART_GAME:
+            map_id = data
+
+            resp_code, data = self.restart_game(map_id)
+            query = pack_resp(command, resp_code, self.server_id, data)
+
+        # +
+        elif command == COMMAND.DISCONNECT_FROM_GAME:
+            map_id = data
+
+            resp_code = self.disconnect_from_game(map_id, player_id, nickname)
+            query = pack_resp(command, resp_code, self.server_id, data=map_id)
+
+        # +
+        elif command == COMMAND.QUIT_FROM_GAME:
+            map_id = data
+
+            resp_code, data = self.quit_from_game(map_id, player_id, nickname)
+            query = pack_resp(command, resp_code, self.server_id, data)
 
         # Put response into the queue
         if query:
