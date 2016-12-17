@@ -3,6 +3,8 @@
 
 # Imports----------------------------------------------------------------------
 import pika  # for Msg Queue
+from pika import exceptions
+
 import uuid  # for generating unique correcaltion_id
 import ConfigParser as CP
 from threading import Thread, Lock
@@ -27,6 +29,7 @@ class Client(object):
 
         self.rabbitmq_connection = None
         self.rabbitmq_channel = None
+        self.rabbitmq = {}  # To store general setting for RabbitMQ such as host, credentials..
 
         self.temp_queue, temp_queue_name = None, ""
 
@@ -34,10 +37,13 @@ class Client(object):
 
         self.resp = None  # response is empty by default
 
-    def open_rabbitmq_connection(self, host, login, password, virtual_host):
+    def open_rabbitmq_connection(self):
         #############
         # Set up RabbitMQ connection
         #############
+
+        host, virtual_host = self.rabbitmq["host"], self.rabbitmq["virtual_host"]
+        login, password = self.rabbitmq["login"], self.rabbitmq["password"]
 
         try:
             print "- Start establishing connection to RabbitMQ server."
@@ -78,20 +84,33 @@ class Client(object):
         else:
             print "- Connection to Redis server is established."
 
-    def send_request(self, query):
+    def send_request(self, query, after_reconnect=False):
         '''
             Put request into the client queue for server
             Later server will fetch this query
 
             :param query: (str) packed command, data in one string
+            :param after_reconnect: (bool) in case of after reconnecting
         '''
 
         print "<< Query (%s) put into request queue" % query
 
         request_queue = 'req_' + self.nickname
-        self.rabbitmq_channel.basic_publish(exchange='',
-                                            routing_key=request_queue,
-                                            body=query)
+
+        try:
+            self.rabbitmq_channel.basic_publish(exchange='',
+                                                routing_key=request_queue,
+                                                body=query)
+        except exceptions.ConnectionClosed:
+            if not after_reconnect:
+                self.open_rabbitmq_connection()
+                self.send_request(query, after_reconnect=True)
+
+                print "Pika connection closed, but now try to reconnect.."
+
+            else:
+                print "Pika couldn't reconnect.."
+
 
     def save_nickname_locally(self, nickname):
         ''' Save nickname in local config file '''
@@ -191,11 +210,8 @@ class Client(object):
         self.send_request(query)
 
     def join_game(self):
-        '''
-        Register a new game on the server
-
-        ###:param map_id: (str) - map that player wants to connect
-        '''
+        ''' Join to existing game on a server '''
+        # map that player wants to connect
         map_id = self.gui.selected_map_id
 
         # Put query into MQ to join existing game
@@ -315,8 +331,13 @@ class Client(object):
     #############
     # Main loop for receiving notifications
     #############
-    def notifications_loop(self, host, login, password, virtual_host):
+    def notifications_loop(self):
         ''' Open new RabbitMQ connection to receive notifications '''
+
+        with lock:
+            host, virtual_host = self.rabbitmq["host"], self.rabbitmq["virtual_host"]
+            login, password = self.rabbitmq["login"], self.rabbitmq["password"]
+
         # TODO: Uncomment it in final version
         # try:
         if 1:
@@ -388,12 +409,20 @@ def main():
     client.gui = gui
     gui.client = client
 
+    # Save credentials for RabbitMQ
+    login, password = args.rabbitmq_credentials.split(":")
+    client.rabbitmq = {
+        "host": args.rabbitmq_host,
+        "login": login,
+        "password": password,
+        "virtual_host": args.rabbitmq_virtual_host
+    }
+
     # Open connection to Redis server
     client.open_redis_connection(args.redis_host, args.redis_port)
 
     # Open connection to RabbitMQ server
-    login, password = args.rabbitmq_credentials.split(":")
-    client.open_rabbitmq_connection(args.rabbitmq_host, login, password, args.rabbitmq_virtual_host)
+    client.open_rabbitmq_connection()
 
     # If connections to RabbitMQ and Rebis were established successfully, run Client
     if client.rabbitmq_connection and client.redis_conn:
@@ -413,45 +442,26 @@ def main():
             request_queue = 'req_' + client.nickname
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)
 
-            # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
-<<<<<<< HEAD
-
 
             if args.test == 1:
-                client.nickname = '123sa'
+                client.nickname = 'rrr'
                 client.selected_server_id = '2'
-                client.my_player_id = 48
+                client.my_player_id = 45
                 gui.selected_map_id = '83'
                 gui.field_size = 20
 
             else:
-                client.nickname = 'ff'
+                client.nickname = 'sss'
                 client.selected_server_id = '2'
-                client.my_player_id = 49
+                client.my_player_id = 46
                 gui.selected_map_id = '83'
                 gui.field_size = 20
 
+            # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
             # Run servers_online window
-            gui.choose_server_window()
+            # gui.choose_server_window()
 
-=======
-            gui.choose_server_window()
-
-            # if args.test == 1:
-            #     client.nickname = '123sa'
-            #     client.selected_server_id = '2'
-            #     client.my_player_id = 48
-            #     gui.selected_map_id = '83'
-            #     gui.field_size = 20
-            #
-            # else:
-            #     client.nickname = 'ff'
-            #     client.selected_server_id = '2'
-            #     client.my_player_id = 49
-            #     gui.selected_map_id = '83'
-            #     gui.field_size = 20
-            #
->>>>>>> origin/master
+            gui.choose_map_window()
             # client.join_game()
 
         else:
@@ -459,11 +469,7 @@ def main():
             gui.nickname_window()
 
         # Start notification loop
-        notifications_thread = Thread(name='NotificationsThread',
-                                      target=client.notifications_loop,
-                                      args=(args.rabbitmq_host,
-                                            login, password,
-                                            args.rabbitmq_virtual_host,))
+        notifications_thread = Thread(name='NotificationsThread', target=client.notifications_loop)
         notifications_thread.setDaemon(True)
         notifications_thread.start()
 

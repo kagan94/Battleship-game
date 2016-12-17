@@ -59,10 +59,13 @@ class Player_to_map(BaseModel):
     time_connected = DateTimeField(default=datetime.datetime.now)
     disconnected = IntegerField()
     my_turn = IntegerField()
+    kicked = IntegerField()
+    spectator_mode = IntegerField()
 
     def __str__(self):
-        return "Id:%s, Map_id:%s, player:%s, time_connected:%s, disconnected:%s, my_turn:%s"\
-               % (self.id, self.map_id, self.player.nickname, self.time_connected, self.disconnected, self.my_turn)
+        return "Id:%s, Map_id:%s, player:%s, time_connected:%s, disconnected:%s, my_turn:%s, kicked:%s, spectator_mode:%s"\
+               % (self.id, self.map_id, self.player.nickname, self.time_connected,
+                  self.disconnected, self.my_turn, self.kicked, self.spectator_mode)
 
     # class Meta:
     #     primary_key = CompositeKey('map', 'player')
@@ -97,11 +100,12 @@ class Player_hits(BaseModel):
     column = IntegerField()
     time = DateTimeField(default=datetime.datetime.now)
     hit = IntegerField()
+    ship_location_id = IntegerField()
 
     def __str__(self):
-        return "shot_id:%s, map_id:%s, player:%s, row:%s, column:%s, time:%s, hit:%s" \
+        return "shot_id:%s, map_id:%s, player:%s, row:%s, column:%s, time:%s, hit:%s, ship_location_id:%s" \
                % (self.shot_id, self.map_id, self.player.nickname, self.row, self.column,
-                  self.time, self.hit)
+                  self.time, self.hit, self.ship_location_id)
 
 
 # class Invitation(BaseModel):

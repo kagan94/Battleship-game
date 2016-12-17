@@ -61,13 +61,16 @@ COMMAND = enum(
         # SOMEONES_SHIP_SANK='24',
         SOMEONE_MADE_SHOT='25',
         YOUR_TURN_TO_MOVE='26',
-        YOU_ARE_KICKED='27',
+        SOMEONE_TURN_TO_MOVE='27',
+        YOU_ARE_KICKED='28',
+        ANOTHER_PLAYER_WAS_KICKED='29',
+        ANOTHER_PLAYER_DISCONNECTED='30',
 
-        SAVE_PLAYER_ID='28',
+        SAVE_PLAYER_ID='31',
 
-        RESTART_GAME='29',
-        GAME_STARTED='30',
-        GAME_FINISHED='31'
+        RESTART_GAME='32',
+        GAME_STARTED='33',
+        GAME_FINISHED='34'
     )
 )
 
@@ -81,15 +84,18 @@ RESP = enum(
     MAP_NAME_ALREADY_EXISTS='4',
     MAP_DOES_NOT_EXIST='5',
     GAME_ALREADY_STARTED='6',
-    ALREADY_JOINED_TO_MAP='7',
+    GAME_ALREADY_FINISHED='7',
+    ALREADY_JOINED_TO_MAP='8',
 
-    MAP_FULL='8',
+    MAP_FULL='9',
 
-    SHIPS_ARE_NOT_PLACED='9',  # when player joined to map, ships are not placed
+    SHIPS_ARE_NOT_PLACED='10',  # when player joined to map, ships are not placed
 
-    LACK_OF_PLACE_FOR_SHIPS='10',
-    PLAYER_ALREADY_KICKED='11',
-    NOT_ENOUGH_PLAYERS='12'  # not enough players to start the game
+    LACK_OF_PLACE_FOR_SHIPS='11',
+    PLAYER_ALREADY_KICKED='12',
+    NOT_ENOUGH_PLAYERS='13',  # not enough players to start the game
+    YOU_ARE_IN_SPECTATOR_MODE='14',  # player can't play, only see the game
+    MIN_NUMBER_OF_PLAYERS='15'  # if number of players on map is too small (case "start game" && "kick player")
 )
 
 
@@ -171,7 +177,6 @@ def command_to_str(command):
     elif command == COMMAND.MY_SHIPS_ON_MAP:
         text = "My ships on map"
     # elif command == COMMAND.INVI
-
 
     # Notifications
     elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
