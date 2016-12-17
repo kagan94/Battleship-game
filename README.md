@@ -51,12 +51,17 @@
 * notification.GAME_FINISHED
 * if ship sank, send notification to damaged player
 
-* Notify next player about his turn
-* Check whether ship is completely sank, then send argument "completely_sank" to player who made shot
+* notify next player about his turn
+* check whether ship is completely sank, then send argument "completely_sank" to player who made shot
 * notify next player if hit = 0
 * added formula for limit exceeding
 * check on limit exceeding while connecting to the map
 * kick player
+* add check on spectator mode while joining to game (server, gui)
+* mark player that goes into spectator mode (in spectator_mode method. On server)
+* add check that there should be at least 2 people on the map before the game can start (start_game method on server)
+* send notification when another player disconnected
+* restart_game
 
 
 ## TODO Server:

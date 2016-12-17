@@ -164,6 +164,55 @@ class GUI(object):
         # # on exit.
         # pygame.quit()
 
-if __name__ == '__main__': 
-    gui = GUI()
-    gui.main()
+# if __name__ == '__main__':
+#     gui = GUI()
+#     gui.main()
+
+
+import Tkinter as tk
+
+
+def demo(master):
+    listbox = tk.Listbox(master)
+    listbox.pack(expand=1, fill="both")
+
+    # inserting some items
+    listbox.insert("end", "A list item")
+
+    for item in ["one", "two", "three", "four"]:
+        listbox.insert("end", item)
+
+    # this changes the background colour of the 2nd item
+    listbox.itemconfig(1, {'bg':'red'})
+
+    # this changes the font color of the 4th item
+    listbox.itemconfig(3, {'fg': 'blue'})
+    listbox.itemconfig(4, {'bg': 'gray'})
+
+    # another way to pass the colour
+    listbox.itemconfig(2, bg=None)
+
+    # print "bg", listbox.itemcget(0, "bg")
+    # listbox.itemconfig(2, bg=tk.NORMAL)
+
+    # listbox.itemconfig(2, bg='green')
+    # listbox.itemconfig(0, foreground="purple")
+
+    # listbox.itemconfig(0, highlightline="purple")
+
+
+    els = listbox.get(0, tk.END)
+
+    for i, el in enumerate(els):
+        print i, el, type(i)
+
+    listbox.itemconfig(i, bg='green')
+    # listbox.itemconfig(i, bg='green')
+
+
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    demo(root)
+    root.mainloop()
