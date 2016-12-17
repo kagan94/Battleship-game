@@ -50,7 +50,6 @@
 * notification.YOUR_TURN_TO_MOVE
 * notification.GAME_FINISHED
 * if ship sank, send notification to damaged player
-
 * notify next player about his turn
 * check whether ship is completely sank, then send argument "completely_sank" to player who made shot
 * notify next player if hit = 0
@@ -61,7 +60,15 @@
 * mark player that goes into spectator mode (in spectator_mode method. On server)
 * add check that there should be at least 2 people on the map before the game can start (start_game method on server)
 * send notification when another player disconnected
-* restart_game
+* restart_game (server, gui)
+
+* change admin when admin quitted
+* update turn in DB when admin quitted
+* assign new admin when admin quitted
+* send notification about game end (when 1 player quitted, and 1 player left)
+* send notification about quit of some player to other players on this map
+* delete quitted player_name from players list (gui)
+
 
 
 ## TODO Server:

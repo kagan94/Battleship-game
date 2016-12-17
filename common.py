@@ -50,27 +50,23 @@ COMMAND = enum(
     PLAYERS_ON_MAP='14',
     MY_SHIPS_ON_MAP='15',
 
-    # INVITE_PLAYERS='10',
-
     # Notifications from the server
     NOTIFICATION=enum(
         PLAYER_JOINED_TO_GAME='21',
         YOUR_SHIP_WAS_DAMAGED='22',
 
-        # YOUR_SHIP_SANK='23',
-        # SOMEONES_SHIP_SANK='24',
         SOMEONE_MADE_SHOT='25',
         YOUR_TURN_TO_MOVE='26',
         SOMEONE_TURN_TO_MOVE='27',
         YOU_ARE_KICKED='28',
         ANOTHER_PLAYER_WAS_KICKED='29',
         ANOTHER_PLAYER_DISCONNECTED='30',
-
         SAVE_PLAYER_ID='31',
 
-        RESTART_GAME='32',
-        GAME_STARTED='33',
-        GAME_FINISHED='34'
+        GAME_STARTED='32',
+        GAME_FINISHED='33',
+        RESTART_GAME='34',
+        ANOTHER_PLAYER_QUITTED='35'
     )
 )
 
@@ -86,11 +82,8 @@ RESP = enum(
     GAME_ALREADY_STARTED='6',
     GAME_ALREADY_FINISHED='7',
     ALREADY_JOINED_TO_MAP='8',
-
     MAP_FULL='9',
-
     SHIPS_ARE_NOT_PLACED='10',  # when player joined to map, ships are not placed
-
     LACK_OF_PLACE_FOR_SHIPS='11',
     PLAYER_ALREADY_KICKED='12',
     NOT_ENOUGH_PLAYERS='13',  # not enough players to start the game

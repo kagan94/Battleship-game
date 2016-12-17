@@ -820,7 +820,6 @@ class Main_Server(object):
 
         # Get all games which have not been started yet
         maps_query = Map.select().where(Map.server == self.server_id)
-                                        # Map.game_started == 0)
 
         for m in maps_query:
             game_started = m.game_started
@@ -996,6 +995,77 @@ class Main_Server(object):
         return resp_code, data
 
     @refresh_db_connection
+    def quit_from_game(self, map_id, player_id, player_nickname):
+        ''' Player wants to quit from the map. All his ships will be removed as well as all shots '''
+        resp_code, data = RESP.OK, ""
+
+        # Clean all shots and ships of player
+        self.remove_all_shots(map_id, player_id)
+        self.remove_all_ships(map_id, player_id)
+
+        map_info = Map.get(map_id=map_id, server=self.server_id)
+
+        # all players, except current (that wants to quit), kicked and in spectator mode
+        players = Player_to_map.select().where(
+            Player_to_map.map == map_id,
+            Player_to_map.player != player_id,
+            Player_to_map.kicked == 0,
+            Player_to_map.spectator_mode == 0
+        )
+
+        current_player_info = Player_to_map.get(Player_to_map.map == map_id, Player_to_map.player == player_id)
+
+        # Check whether player admin or not, if yes change admin (total_players > 1) else delete map
+        # Delete this map (if player is alone on this map)
+        if players.count() == 0:
+            map_info.delete_instance()
+
+        else:
+            next_player_id, next_player_nickname = self.find_next_player(map_id, current_player_id=player_id)
+
+            # Find current player is admin, then choose person who has next turn
+            if player_id == str(map_info.owner):
+                # Update new admin in DB
+                map_info.owner = next_player_id
+                map_info.save()
+
+                previous_admin_name = player_nickname
+                data = pack_data([map_id, map_info.name, previous_admin_name, map_info.game_started])
+
+                # Notify next player
+                query = pack_resp(COMMAND.NOTIFICATION.YOU_ARE_NEW_ADMIN, RESP.OK, data)
+                self.send_response(next_player_nickname, query)
+
+            # If it's turn of player who wants to quit, then choose person who has next turn
+            if current_player_info.my_turn == 1:
+                # Update turn in DB
+                Player_to_map.update(my_turn=1).where(
+                    Player_to_map.map == map_id,
+                    Player_to_map.player == next_player_id
+                )
+
+            # If only 1 player remained on the map, send notification about end game to him
+            if players.count() == 1:
+                # send notification about game end
+                query = pack_resp(COMMAND.NOTIFICATION.GAME_FINISHED, RESP.OK, map_id)
+                self.send_response(next_player_nickname, query)
+
+            data = pack_data([map_id, map_info.name, player_nickname])
+
+            # Send notification about quit to other players on this map
+            for record in players:
+                query = pack_resp(COMMAND.NOTIFICATION.ANOTHER_PLAYER_QUITTED, RESP.OK, data)
+                self.send_response(record.player.nickname, query)
+
+        # Delete record about player presence on this map
+        current_player_info.delete_instance()
+
+        # Prepare data for response (map_id, map_name)
+        data = pack_data([map_id, map_info.name])
+
+        return resp_code, data
+
+    @refresh_db_connection
     def remove_all_shots(self, map_id, player_id=None):
         '''
         In case of restarting the game or quit from the game, we need to remove all ships from the map
@@ -1135,19 +1205,19 @@ class Main_Server(object):
             resp_code, data = self.make_hit(map_id, player_id, nickname, row, column)
             query = pack_resp(command, resp_code, self.server_id, data)
 
+        # +
         elif command == COMMAND.DISCONNECT_FROM_GAME:
             map_id = data
 
             resp_code = self.disconnect_from_game(map_id, player_id, nickname)
             query = pack_resp(command, resp_code, self.server_id, data=map_id)
 
+        # +
         elif command == COMMAND.QUIT_FROM_GAME:
+            map_id = data
 
-            def quit_from_game(player_id):
-                pass
-                # kicked = p.kicked if p.kicked is not None else "0"
-
-            pass
+            resp_code, data = self.quit_from_game(map_id, player_id, nickname)
+            query = pack_resp(command, resp_code, self.server_id, data)
 
         # +
         elif command == COMMAND.START_GAME:
@@ -1202,38 +1272,38 @@ class Main_Server(object):
         # Remove read msg rom queue
         self.rabbitmq_channel.basic_ack(delivery_tag=method.delivery_tag)
 
-# nickname = "sdasds"
-# player_id = Player.get(Player.nickname == nickname).player_id
-# map_id, row, column = "9", "3", "5"
+    # nickname = "sdasds"
+    # player_id = Player.get(Player.nickname == nickname).player_id
+    # map_id, row, column = "9", "3", "5"
 
-# r = register_nickname()
-# player = Player.select().where(Player.nickname==seached_nickname).get()
-# print player_id
+    # r = register_nickname()
+    # player = Player.select().where(Player.nickname==seached_nickname).get()
+    # print player_id
 
-# resp_code, hit_result = register_hit(map_id, player_id, row, column)
-# resp_code, map_id = create_new_map(player_id, "new map 2.0", "25", "30")
+    # resp_code, hit_result = register_hit(map_id, player_id, row, column)
+    # resp_code, map_id = create_new_map(player_id, "new map 2.0", "25", "30")
 
-# print resp_code, map_id
+    # print resp_code, map_id
 
-# ================================
-# map = Map
-# m = Map.get(Map.owner_id == 3)
-# map = Player(nickname="sdasds")
-# m = Map(owner_id=3)
-# m.save()
+    # ================================
+    # map = Map
+    # m = Map.get(Map.owner_id == 3)
+    # map = Player(nickname="sdasds")
+    # m = Map(owner_id=3)
+    # m.save()
 
-# Map.select().where(Map.owner_id==3)
+    # Map.select().where(Map.owner_id==3)
 
-# for s in Map.select().where(Map.owner==3):
-#     print s.map_id, s.owner.player_id, s.owner.nickname
+    # for s in Map.select().where(Map.owner==3):
+    #     print s.map_id, s.owner.player_id, s.owner.nickname
 
-# print Player_to_map.select()
-#
-# for s in Player_hits.select().where(Player_hits.map_id == 8):
-#     print s.shot_id, s.map_id, s.player_id, s.player.nickname, s.time
+    # print Player_to_map.select()
+    #
+    # for s in Player_hits.select().where(Player_hits.map_id == 8):
+    #     print s.shot_id, s.map_id, s.player_id, s.player.nickname, s.time
 
-# for s in Invitations.select().where(Invitations.map_id == 8):
-#     print s.invitation_id, s.map_id, s.initiator_id, s.invited_player_id
+    # for s in Invitations.select().where(Invitations.map_id == 8):
+    #     print s.invitation_id, s.map_id, s.initiator_id, s.invited_player_id
 
     # print s.shot_id, s.map_id, s.player_id, s.player.nickname, s.time
 
