@@ -455,6 +455,13 @@ def main():
                 gui.selected_map_id = '83'
                 gui.field_size = 20
 
+            elif args.test == 2:
+                client.nickname = 'ff'
+                client.selected_server_id = '2'
+                client.my_player_id = 49
+                gui.selected_map_id = '83'
+                gui.field_size = 20
+
             else:
                 client.nickname = 'sss'
                 client.selected_server_id = '2'

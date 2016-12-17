@@ -1,6 +1,7 @@
 # Battleship-game
+![SQL db scatch](http://clip2net.com/clip/m527982/94ac0-clip-532kb.png)
 
-![SQL db scatch](http://clip2net.com/clip/m527982/e304a-clip-108kb.png)
+![SQL db scatch](http://clip2net.com/clip/m527982/5b1a1-clip-45kb.png)
 
 ## Already DONE:
 * Establishment of sql connection + created basic structure of DB + created models for DB (server)
@@ -67,15 +68,13 @@
 * send notification about game end (when 1 player quitted, and 1 player left)
 * send notification about quit of some player to other players on this map
 * delete quitted player_name from players list (gui)
-
-
+* Add notification to other players that this player was kicked (server)
 
 ## TODO Server:
-* change admin after timeout
+* CLEAN ALL TODOs
+* change admin after timeout (in thread)
 
 ## TODO Client:
 * Add "KeyboardInterrupt, SystemExit" after connecting GUI
 
 ## TODO GUI:
-
-![SQL db scatch](http://clip2net.com/clip/m527982/5b1a1-clip-45kb.png)

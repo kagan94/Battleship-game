@@ -972,6 +972,9 @@ class GUI(object):
             If kicked - mark red, if disconnected - mark gray.
             If it's player_nickname turn, then mark his nickname in list with green color.
         '''
+        # Player list should exist before updating
+        if self.players_l is None:
+            return
 
         all_players = self.players_l.get(0, END)
         pos_in_list = -1
@@ -1144,8 +1147,9 @@ class GUI(object):
                             tkMessageBox.showinfo("Notification", "It's your turn to make move.")
 
                     else:
-                        # Unblock "spectator mode" button
+                        # Unblock "spectator mode" button and "start game"
                         self.spectator_mode_b.config(state=NORMAL)
+                        self.start_game_b.config(state=NORMAL)
 
                         self.add_notification("Game hasn't been started yet.")
 
@@ -1161,15 +1165,12 @@ class GUI(object):
                     if owner_id == self.client.my_player_id:
                         self.kick_player_b.config(state=NORMAL)
 
-                        # If admin still hasn't placed his ships, block button "start"
-                        if ships_already_placed == "0":
-                            self.start_game_b.config(state=DISABLED)
-
+                        # if ships_already_placed == "0" and game_already_started == "0":
                         # Unblock "start game" button
-                        elif ships_already_placed == "1" and game_already_started == "0":
-                            self.start_game_b.config(state=NORMAL)
+                        # elif ships_already_placed == "1" and game_already_started == "0":
+                        #     self.start_game_b.config(state=NORMAL)
 
-                        self.add_notification("Your are admin on this map, you can kick players")
+                        self.add_notification("You're admin on this map, you can kick players")
 
 
                         # elif resp_code in [RESP.OK, RESP.ALREADY_JOINED_TO_MAP, RESP.GAME_ALREADY_STARTED]:
@@ -1399,7 +1400,7 @@ class GUI(object):
                         self.mark_player_in_list(player_nickname, disconnected=True)
 
                     # If player's ships don't have color, generate a new color
-                    if player_id not in self.players_colors.keys():
+                    if player_id not in self.players_colors:
                         color = self.possible_colors.pop(0)
                         self.players_colors[player_id] = color
 
@@ -1502,7 +1503,8 @@ class GUI(object):
         elif command == COMMAND.NOTIFICATION.ANOTHER_PLAYER_DISCONNECTED:
             player_id, player_nickname = parse_data(data)
 
-            self.players_on_map[player_id]["disconnected"] = "1"
+            if player_id in self.players_on_map:
+                self.players_on_map[player_id]["disconnected"] = "1"
 
             # Mark player with gray color (means he is disconnected)
             self.mark_player_in_list(player_nickname, disconnected=True)
@@ -1610,6 +1612,10 @@ class GUI(object):
 
             # Current map corresponds to map where player plays
             if map_id == self.selected_map_id:
+                # Player can't don any shot any more
+                with lock:
+                    self.my_turn_to_move = False
+
                 # Block buttons kick player and disconnect
                 self.kick_player_b.config(state=DISABLED)
                 self.disconnect_b.config(state=DISABLED)

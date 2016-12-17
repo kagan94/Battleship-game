@@ -47,7 +47,7 @@ def DELETE_ALL_QUEUES():
     connection.close()
     print "All queues were deleted"
 
-DELETE_ALL_QUEUES()
+# DELETE_ALL_QUEUES()
 
 
 def check_db_connection():
@@ -442,10 +442,11 @@ class Main_Server(object):
                 Player_to_map.kicked == 0,
                 Player_to_map.spectator_mode == 0
             )
-            # TODO: Add notification to other players that this player was kicked
+
+            # Add notification to other players that this player was kicked
             for p in remaining_players:
-                query = pack_resp(COMMAND.NOTIFICATION.ANOTHER_PLAYER_WAS_KICKED,
-                                  RESP.OK, data=pack_data([player_id_to_kick, player_nickname]))
+                query = pack_resp(COMMAND.NOTIFICATION.ANOTHER_PLAYER_WAS_KICKED, RESP.OK, self.server_id,
+                                  data=pack_data([player_id_to_kick, player_nickname]))
                 self.send_response(p.player.nickname, query)
         else:
             resp_code = RESP.PLAYER_ALREADY_KICKED
@@ -576,7 +577,7 @@ class Main_Server(object):
                 map_info_inst.save()
 
                 all_players = Player_to_map.select().where(Player_to_map.map == map_id)
-                data = pack_data([map_id, map_info.name. map_info.owner_id])
+                data = pack_data([map_id, map_info.name, map_info.owner_id])
 
                 # Put notification about game end into the RabbitMQ
                 for record in all_players:
@@ -813,8 +814,8 @@ class Main_Server(object):
                     # Check that current player and creator of the map are different players
                     for record in all_players:
                         if record.player.player_id != player_id:
-                            query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME,
-                                              RESP.OK, data=pack_data([player_id, player_nickname]))
+                            query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME, RESP.OK, self.server_id,
+                                              data=pack_data([player_id, player_nickname]))
                             self.send_response(record.player.nickname, query)
 
         data = pack_data([my_turn, ships_already_placed, game_already_started, owner_id])
@@ -944,7 +945,7 @@ class Main_Server(object):
         # Send notification to remaining players about current player disconnection
         for p in remaining_players:
             query = pack_resp(COMMAND.NOTIFICATION.ANOTHER_PLAYER_DISCONNECTED,
-                              RESP.OK, data=pack_data([player_id, player_nickname]))
+                              RESP.OK, self.server_id, data=pack_data([player_id, player_nickname]))
             self.send_response(p.player.nickname, query)
 
         return resp_code
@@ -966,7 +967,7 @@ class Main_Server(object):
             )
             for p in remaining_players:
                 query = pack_resp(COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME,
-                                  RESP.OK, data=pack_data([player_id, player_nickname]))
+                                  RESP.OK, self.server_id, data=pack_data([player_id, player_nickname]))
                 self.send_response(p.player.nickname, query)
 
     @refresh_db_connection
@@ -983,23 +984,22 @@ class Main_Server(object):
         self.remove_all_shots(map_id)
         self.remove_all_ships(map_id)
 
-        players = Player_to_map.where(
+        players = Player_to_map.select().where(
             Player_to_map.map == map_id,
-            Player_to_map.server == self.server_id,
             Player_to_map.kicked == 0)
-
-        # Set all players from spectator mode to normal state
-        map_info.update(spectator_mode=0).execute()
 
         # Set initial turn for admin
 
         # Prepare data to dispatch
-        data = pack_data([self.server_id, map_id, map_info.name, map_info.player.nickname])
+        data = pack_data([self.server_id, map_id, map_info.name, map_info.owner.nickname])
 
         # Send notifications to all players that played on this map, except admin
         for p in players:
+            # Set all players from spectator mode to normal state
+            p.update(spectator_mode=0).execute()
+
             if p.player != map_info.owner:
-                query = pack_resp(COMMAND.NOTIFICATION.RESTART_GAME, RESP.OK, data)
+                query = pack_resp(COMMAND.NOTIFICATION.RESTART_GAME, RESP.OK, self.server_id, data)
                 self.send_response(p.player.nickname, query)
 
         return resp_code, data
