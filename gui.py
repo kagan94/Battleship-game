@@ -43,10 +43,6 @@ class GUI(object):
         # Queue to collect and proceed the tasks from server
         self.tasks = Queue.Queue()
 
-        # Queue to collect and proceed the tasks in pygame
-        # self.pygame_tasks = Queue.Queue()
-        # self.pygame_lock = Lock()
-
         self.client = None
         self.root = None
         self.frame = None
@@ -84,31 +80,22 @@ class GUI(object):
         self.notifications = ScrolledText(self.root, width=30, height=20, state=NORMAL)
         self.notifications.pack()
 
-        # Each 10 ms check whether client received something or not
-        # print self.client.resp
-        # self.add_notification(str(i))
-
         while True:
-            # print self.tasks._qsize()
+            # Put received task into the queue to process it
             try:
                 task = self.tasks.get(False)
-                # print task
-
             # Handle empty queue here
             except Queue.Empty:
                 pass
             else:
-                # Handle task here and call q.task_done()
                 self.process_task(task)
                 self.tasks.task_done()
 
-            # try:
-            # win = Tk()
-
+            # Equivalent to self.mainloop().
+            # Because we need to check our queue with tasks, we used this construction
             try:
                 self.root.update_idletasks()
                 self.root.update()
-
             # Catch error "can't invoke "update" command:
             # application has been destroyed
             except TclError, KeyboardInterrupt:
@@ -118,24 +105,6 @@ class GUI(object):
                 break
 
             time.sleep(0.1)
-
-            # except:
-            #     .update_idletasks()
-            #     win2.update()
-            #     time.sleep(0.1)
-
-
-            # if self.client.resp is None:
-            #     # print "window's alive"
-            #     try:
-            #         self.root.after(10, self.check_resp)  # timeout 10 ms
-            #     # If app was already destroyed
-            #     except:
-            #         pass
-            # else:
-            #     self.root.destroy()
-            #     print "window is destroying"
-            #     # self.destoy_root()
 
     def nickname_window(self):
         self.nickname_root = Tk()
@@ -156,11 +125,6 @@ class GUI(object):
 
         self.check_nick_button = Button(self.nickname_root, text="Choose", command=self.on_nickname_submit)
         self.check_nick_button.pack()
-
-        # with lock:
-        #     self.tasks.put("launch_nickname_window")
-
-        # self.root.mainloop()
 
     def choose_server_window(self):
         # Destroy previous window
@@ -190,9 +154,6 @@ class GUI(object):
         # Join server button
         self.join_server_b = Button(self.server_root, text="Connect", command=self.choose_map_window, state=DISABLED)
         self.join_server_b.pack()
-
-        # if self.choose_map_window is None:
-        #     self.choose_map_window()
 
         # Show client which servers are on-line (get from Redis)
         self.servers_online = self.client.available_servers()
@@ -260,7 +221,7 @@ class GUI(object):
         self.field = Label(self.create_new_map_root, text="Select a size of the field")
         self.field.pack()
 
-        self.size = 20
+        self.field_size = 20
 
         choices = {
             'S',
@@ -439,24 +400,19 @@ class GUI(object):
         # array is simply a list of lists.
         self.grid = []
 
-        self.size = self.field_size
-
-        for row in range(self.size):
+        # (Remember rows and column numbers start at zero.)
+        for row in range(self.field_size):
             # Add an empty array that will hold each cell
             # in this row
             self.grid.append([])
-            for column in range(self.size):
+            for column in range(self.field_size):
                 self.grid[row].append(0)  # Append a cell
-
-        # Set row 1, cell 5 to one.
-        # (Remember rows and column numbers start at zero.)
-        # self.grid[1][5] = 1
 
         # Initialize pygame
         pygame.init()
 
         # Set the HEIGHT and WIDTH of the screen
-        self.max_size = (WIDTH + MARGIN) * self.size + MARGIN
+        self.max_size = (WIDTH + MARGIN) * self.field_size + MARGIN
         self.WINDOW_SIZE = [self.max_size, self.max_size]
         self.screen = pygame.display.set_mode(self.WINDOW_SIZE)
 
@@ -470,28 +426,12 @@ class GUI(object):
         clock = pygame.time.Clock()
 
         def draw_dash(i, j):
-            # print i, j
-            # x1, x2 = 20, 20 + MARGIN + WIDTH
-            # y1, y2 = 120, 120
-            # i, j = 19, 19
-
-            # x1 = (MARGIN + WIDTH) * j
-            # x2 = (MARGIN + WIDTH) * j + MARGIN + WIDTH
-            # y1 = y2 = (MARGIN + HEIGHT) * i - ((MARGIN + HEIGHT) / 2)
-
             x1 = (MARGIN + WIDTH) * i
             x2 = (MARGIN + WIDTH) * i + MARGIN + WIDTH
             y1 = (MARGIN + HEIGHT) * j + (MARGIN + HEIGHT) / 2
             y2 = (MARGIN + HEIGHT) * j + (MARGIN + HEIGHT) / 2
 
-            # if y2 > self.maxx:
-            #     self.maxx = y2
-            #     print x1, x2, "_____"
-
-            # x1, x2, y2 = 0, 14, 275
-            # y1 = y2
-
-            # print x1, x2, y2, MARGIN + WIDTH, y2 >= self.max_size, x1 >= self.max_size, x2 >= self.max_size,
+            # Draw dash (if someone missed)
             pygame.draw.line(self.screen, BLACK, (x1, y1), (x2, y2), 3)
 
         def draw_cross(i, j):
@@ -500,10 +440,9 @@ class GUI(object):
             y1 = (MARGIN + HEIGHT) * j
             y2 = (MARGIN + HEIGHT) * j + MARGIN + HEIGHT
 
+            # Draw cross (if shot was successful)
             pygame.draw.line(self.screen, BLACK, (x1, y1), (x2, y2), 3)
             pygame.draw.line(self.screen, BLACK, (x2, y1), (x1, y2), 3)
-
-            # print x1, x2, y1, y2, "<<<<<<<<<<<<<<<<<<<<<<<<<<<"
 
         # -------- Main Program Loop -----------
         while not self.pygame_done:
@@ -511,7 +450,6 @@ class GUI(object):
 
                 if event.type == pygame.QUIT:  # If user clicked close
                     self.on_disconnect()  # Flag that we are done so we exit this loop
-                    # self.pygame_done = True
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     # and self.my_turn_to_move
@@ -529,9 +467,6 @@ class GUI(object):
 
                     # Request to register shot
                     # Here we need to check that player didn't shot in one cell twice
-
-                    # print cell, self.players_colors.keys(), self.shots_colors.keys()
-
                     if cell not in self.players_colors.keys() \
                             and cell not in self.shots_colors.keys() \
                             and self.my_turn_to_move:
@@ -545,50 +480,52 @@ class GUI(object):
             # Set the screen background
             self.screen.fill(BLACK)
 
-            # try:
-            # Draw the grid
-            for row in range(self.size):
-                for column in range(self.size):
-                    color = WHITE
+            try:
+                # Draw the grid
+                for row in range(self.field_size):
+                    for column in range(self.field_size):
+                        key = self.grid[row][column]
 
-                    key = self.grid[row][column]
+                        # default color for cell is white
+                        color = WHITE
 
-                    # print self.players_colors
-                    # My ships
-                    # if key == -1:
-                    # color = self.players_colors[self.client.my_player_id]
-                    # color = BLACK
+                        # In this case 'key" = player_id
+                        if key in self.players_colors.keys():
+                            color = self.players_colors[key]
 
-                    # In this case 'key" = player_id
-                    if key in self.players_colors.keys():
-                        color = self.players_colors[key]
+                        damaged_player_id = str((-1) * int(key))
 
-                    damaged_player_id = str((-1) * int(key))
+                        # Damaged ships has also player_id but it's negative.
+                        # Thus, we can recognize which shot we shot targeted in which player
+                        if damaged_player_id in self.players_on_map.keys():
+                            # If player still doesn't have color, assign new color to him
+                            if damaged_player_id not in self.players_colors:
+                                color = self.possible_colors.pop(0)
+                                self.players_colors[damaged_player_id] = color
 
-                    # print self.client.my_player_id in self.players_colors.keys()
-                    if damaged_player_id in self.players_on_map.keys():
-                        # print self.players_colors
-                        color = self.players_colors[damaged_player_id]
+                            color = self.players_colors[damaged_player_id]
 
-                    pygame.draw.rect(self.screen,
-                                     color,
-                                     [(MARGIN + WIDTH) * column + MARGIN,
-                                      (MARGIN + HEIGHT) * row + MARGIN,
-                                      WIDTH,
-                                      HEIGHT])
 
-                    # For cases:
-                    # - My ship was damaged
-                    # - My hit was successful
-                    if key in [-10, -11] or damaged_player_id in self.players_on_map.keys():
-                        # draw_dash(column, row)
-                        draw_cross(column, row)
+                        pygame.draw.rect(self.screen,
+                                         color,
+                                         [(MARGIN + WIDTH) * column + MARGIN,
+                                          (MARGIN + HEIGHT) * row + MARGIN,
+                                          WIDTH,
+                                          HEIGHT])
 
-                    # Someone made a shot, but missed
-                    elif key == -12:
-                        draw_dash(column, row)
-            # except IndexError:
-            #     pass
+                        # For cases:
+                        # - My ship was damaged
+                        # - My hit was successful
+                        if key in [-10, -11] or damaged_player_id in self.players_on_map.keys():
+                            # draw_dash(column, row)
+                            draw_cross(column, row)
+
+                        # Someone made a shot, but missed
+                        elif key == -12:
+                            draw_dash(column, row)
+            except IndexError:
+                print "You clicked out of field"
+                pass
 
             # Limit to 60 frames per second
             clock.tick(60)
@@ -630,7 +567,7 @@ class GUI(object):
                 ship_size = info[k + 5]
 
                 # If player's ships don't have color, generate a new color
-                if player_id not in self.players_colors.keys():
+                if player_id not in self.players_colors:
                     color = self.possible_colors.pop(0)
                     self.players_colors[player_id] = color
 
@@ -650,31 +587,13 @@ class GUI(object):
         '''
         i, j = int(target_row), int(target_column)
 
-        # TODO: Add color for damaged_player_id (in case of hit_successful)
-
         with lock:
+            # Depending on whether the hit was successful or not, mark cell differently
             if hit_successful == "1" and damaged_player_id is not None:
-                # print "damaged_player_id", damaged_player_id
-
                 self.grid[i][j] = (-1) * int(damaged_player_id)
 
             elif hit_successful == "1":
                 self.grid[i][j] = -11
-
-            # self my_ship_was_damaged
-
-            # Depending on whether the hit was successful or not, mark cell differently
-            # if my_ship_was_damaged is None:
-            #     self.grid[i][j] = -10
-            #
-            #     print "damaged_player_id %s, type(%s)" % (damaged_player_id, type(damaged_player_id))
-            #     if damaged_player_id is not None:
-            #         print 111111111, (-1) * int(damaged_player_id), str(int(damaged_player_id)) in self.players_colors.keys()
-            #         self.grid[i][j] = (-1) * int(damaged_player_id)
-            #
-            # # My hit was successful, update the battlefield
-            # elif hit_successful == "1":
-            #     self.grid[i][j] = -11
 
             # I made shot, but I missed
             else:
@@ -707,6 +626,7 @@ class GUI(object):
 
         # Only 1 click to connect to particular server is allowed
         if selected_server is not None and (self.selected_server != selected_server):
+
             # Unblock "join server" button
             self.join_server_b.config(state=NORMAL)
 
@@ -717,8 +637,6 @@ class GUI(object):
 
             # Save chosen server name
             self.selected_server = selected_server
-
-            # print self.selected_server, self.selected_server_id
 
     def on_game_selection(self, event):
         self.connect_to_map_b.config(state=NORMAL)
@@ -745,10 +663,6 @@ class GUI(object):
                     self.field_size = int(map_params["size"])  # list [rows, columns]
                     break
 
-            # self.client.selected_map_id = self.selected_map_id
-
-            print self.selected_map, self.selected_map_id
-
     def on_player_selection(self, event):
         widget = self.players_l  # list of players
 
@@ -769,11 +683,11 @@ class GUI(object):
                     break
 
     def on_connect_to_server(self):
-        ''' When player click button "Connect to selected map" '''
+        ''' When player click button "Connect to selected server" '''
         if self.selected_server:
             self.join_server_b.config(state=DISABLED)
 
-            # TODO: Request to connect to the map
+            # Run choose map window
             self.choose_map_window()
 
     def on_connect_to_map(self):
@@ -786,7 +700,6 @@ class GUI(object):
             print "Waiting for response from server"
 
             self.client.join_game()
-            # TODO: Request to connect to the map
 
     def on_create_map(self):
         # Send request to create new map
@@ -818,8 +731,6 @@ class GUI(object):
 
             self.client.kick_player(player_id=self.selected_player_id)
 
-            # TODO: Get selected player name and send request to kick it
-
     def on_start_game(self):
         ''' Trigger client to send request with command "Start game" '''
         # Set button state to disable, until we will receive the response
@@ -846,12 +757,8 @@ class GUI(object):
 
     def on_quit(self):
         ''' Player wants to quit from the game. Should redirect to maps '''
-        # with lock:
-        #     self.pygame_done = True
 
         self.client.quit_from_game()
-
-        # self.destroy_previous_root()
 
     #############################################
     # Other methods
@@ -865,9 +772,8 @@ class GUI(object):
         self.client.resp = None
 
     def unfreeze_connect_to_map_buttons(self):
-        # print self.connect_to_map_b, type(self.connect_to_map_b)
+        ''' Unblock buttons to create or join to the server '''
 
-        # Unblock buttons to create or join to the server
         if self.connect_to_map_b and self.create_new_game_b:
             self.connect_to_map_b.config(state=NORMAL)
             self.create_new_game_b.config(state=NORMAL)
@@ -876,17 +782,8 @@ class GUI(object):
         msg = "> " + str(msg) + "\n"
         self.notifications.insert(0.0, msg)
 
-        # def show_popup(self, msg):
-        #     print msg
-        # tkMessageBox.showinfo("Notification", msg)
-        # self.popup_msg = None
-        # self.popup_msg = msg
-
     def update_maps_list(self):
-        # Update list of maps inside window choose maps
-        # self.maps is a dict[map_id] = {"name":map_name, "size": field_size]
-
-        # print self.maps_list
+        ''' Update list of maps inside window "choose map '''
 
         if self.maps_list:
             # delete all previous items from previous list
@@ -912,10 +809,9 @@ class GUI(object):
 
         :param map_name: (str)
         :param game_started: (str) 0 - no, 1 - yes, 2 - game finished
-        :param pos: (int) (position of map in the list)
+        :param pos_in_list: (int) (position of map in the list)
         '''
 
-        # print "map_name", map_name, game_started, pos_in_list
         if pos_in_list is None:
             all_maps = self.maps_list.get(0, END)
             pos_in_list = -1
@@ -928,7 +824,6 @@ class GUI(object):
 
         # If player was found, then  mark him
         if pos_in_list != -1:
-            # print 11, game_started == "0"
             if game_started == "0":
                 self.maps_list.itemconfig(pos_in_list, bg='green')
 
@@ -937,6 +832,62 @@ class GUI(object):
 
             elif game_started == "2":
                 self.maps_list.itemconfig(pos_in_list, bg='gray')
+
+    def mark_player_in_list(self, player_nickname, kicked=False, disconnected=False, turn=False):
+        '''
+            Here we mark player with specific color depending on player state.
+            If kicked - mark red, if disconnected - mark gray.
+            If it's player_nickname turn, then mark his nickname in list with green color.
+        '''
+        # Player list should exist before updating
+        if self.players_l is None:
+            return
+
+        try:
+            all_players = self.players_l.get(0, END)
+        except TclError:
+            return
+
+        pos_in_list = -1
+
+        # Find player in list by his nickname
+        for i, el in enumerate(all_players):
+            if el.strip() == player_nickname:
+                pos_in_list = i
+                break
+
+        # If player was found, then  mark him
+        if pos_in_list != -1:
+            if kicked:
+                self.players_l.itemconfig(pos_in_list, bg='red')
+
+            elif disconnected:
+                self.players_l.itemconfig(pos_in_list, bg='gray')
+
+            # If it's player's turn - mark him with green
+            elif turn:
+                self.players_l.itemconfig(pos_in_list, bg='green')
+
+            # If it's player's turn - mark him with default color (white color)
+            elif turn == False:
+                self.players_l.itemconfig(pos_in_list, bg='white')
+
+    def remove_player_from_players_list(self, player_nickname):
+        '''
+            Here we iterate over the list of current of players on the map,
+            to find and remove requested player
+        '''
+
+        all_players = self.players_l.get(0, END)
+        pos_in_list = -1
+
+        for i, el in enumerate(all_players):
+            if el.strip() == player_nickname:
+                pos_in_list = i
+                break
+
+        if pos_in_list != -1:
+            self.players_l.delete(pos_in_list)
 
     def destroy_previous_root(self):
         ''' Destroy previous window '''
@@ -966,58 +917,6 @@ class GUI(object):
             self.players_root.destroy()
             self.players_root = None
 
-    def mark_player_in_list(self, player_nickname, kicked=False, disconnected=False, turn=False):
-        '''
-            Here we mark player with specific color depending on player state.
-            If kicked - mark red, if disconnected - mark gray.
-            If it's player_nickname turn, then mark his nickname in list with green color.
-        '''
-        # Player list should exist before updating
-        if self.players_l is None:
-            return
-
-        all_players = self.players_l.get(0, END)
-        pos_in_list = -1
-
-        # Find player in list by his nickname
-        for i, el in enumerate(all_players):
-            if el == player_nickname:
-                pos_in_list = i
-                break
-
-        # If player was found, then  mark him
-        if pos_in_list != -1:
-            if kicked:
-                self.players_l.itemconfig(pos_in_list, bg='red')
-
-            elif disconnected:
-                self.players_l.itemconfig(pos_in_list, bg='gray')
-
-            # If it's player's turn - mark him with green
-            elif turn:
-                self.players_l.itemconfig(pos_in_list, bg='green')
-
-            # If it's player's turn - mark him with default color
-            elif turn == False:
-                self.players_l.itemconfig(pos_in_list, bg=None)
-
-    def remove_player_from_players_list(self, player_nickname):
-        '''
-            Here we iterate over the list of current of players on the map,
-            to find and remove requested player
-        '''
-
-        all_players = self.players_l.get(0, END)
-        pos_in_list = -1
-
-        for i, el in enumerate(all_players):
-            if el == player_nickname:
-                pos_in_list = i
-                break
-
-        if pos_in_list != -1:
-            self.players_l.delete(pos_in_list)
-
     ####################
     # Important function to process responses from servers
     ####################
@@ -1025,14 +924,9 @@ class GUI(object):
         ''' Handler to receive response on request reg_me '''
         command, resp_code, server_id, data = parse_response(task)
 
-        # print command, resp_code, server_id, data
-
         print ">> Received resp(%s) on command: %s, server(%s)" \
               % (error_code_to_string(resp_code), command_to_str(command), server_id)
 
-        # print task
-
-        # +
         if command == COMMAND.LIST_OF_MAPS:
             maps_data = parse_data(data)
             self.maps = {}
@@ -1041,7 +935,6 @@ class GUI(object):
                 self.add_notification("No available maps online")
 
             else:
-                # with lock:
                 # Decompress maps (map_id, map_name, field size) to dict[map_id] = [params]
                 for i in range(0, len(maps_data), 4):
                     map_id = maps_data[i]
@@ -1057,7 +950,6 @@ class GUI(object):
                 self.update_maps_list()
                 self.add_notification("List with maps updated successfully")
 
-        # +
         elif command == COMMAND.CREATE_NEW_GAME:
             map_id, map_name, map_size = parse_data(data)
 
@@ -1086,7 +978,6 @@ class GUI(object):
                 err_msg = error_code_to_string(resp_code)
                 self.add_notification(err_msg)
 
-        # +
         elif command == COMMAND.JOIN_EXISTING_GAME:
             if resp_code == RESP.MAP_DOES_NOT_EXIST:
                 self.add_notification("Requested map doesn't exist")
@@ -1131,8 +1022,6 @@ class GUI(object):
                 else:
                     my_turn, ships_already_placed, game_already_started, owner_id = parse_data(data)
 
-                    # print "JOIN_EXISTING_GAME:", my_turn, ships_already_placed, game_already_started, owner_id
-
                     if game_already_started == "1":
                         # Unblock "spectator mode" button
                         self.spectator_mode_b.config(state=NORMAL)
@@ -1149,7 +1038,6 @@ class GUI(object):
                     else:
                         # Unblock "spectator mode" button and "start game"
                         self.spectator_mode_b.config(state=NORMAL)
-                        self.start_game_b.config(state=NORMAL)
 
                         self.add_notification("Game hasn't been started yet.")
 
@@ -1165,45 +1053,12 @@ class GUI(object):
                     if owner_id == self.client.my_player_id:
                         self.kick_player_b.config(state=NORMAL)
 
-                        # if ships_already_placed == "0" and game_already_started == "0":
-                        # Unblock "start game" button
-                        # elif ships_already_placed == "1" and game_already_started == "0":
-                        #     self.start_game_b.config(state=NORMAL)
+                        # If game is not started, unblock button "start game"
+                        if game_already_started == "0":
+                            self.start_game_b.config(state=NORMAL)
 
                         self.add_notification("You're admin on this map, you can kick players")
 
-
-                        # elif resp_code in [RESP.OK, RESP.ALREADY_JOINED_TO_MAP, RESP.GAME_ALREADY_STARTED]:
-                        #     # # Run PyGame window to draw the Battlefield
-                        #     # print "Draw field..."
-                        #     # self.run_game()
-                        #
-                        #     # If player already joined the game
-                        #     # Then trigger command to get freshest shots
-                        #     if resp_code == RESP.ALREADY_JOINED_TO_MAP:
-                        #         self.client.get_existing_shots()
-                        #     else:
-                        #         self.place_ships_b.config(state=NORMAL)
-                        #
-                        #     # Unblock "spectator mode" button
-                        #     self.spectator_mode_b.config(state=NORMAL)
-                        #
-                        #     my_turn = data
-                        #     if my_turn == "1":
-                        #         with lock:
-                        #             self.my_turn_to_move = True
-                        #
-                        # else:
-                        #     error = "Command: %s \n" % command_to_str(command)
-                        #     error += error_code_to_string(resp_code)
-                        #
-                        #     self.add_notification(error)
-                        #
-                        #     # Unblock buttons
-                        #     self.unfreeze_connect_to_map_buttons()
-
-
-        # +
         elif command == COMMAND.PLACE_SHIPS:
 
             if resp_code == RESP.OK:
@@ -1216,8 +1071,7 @@ class GUI(object):
                     ship = (info[i], info[i + 1], info[i + 2], info[i + 3], info[i + 4])
                     self.my_ships_locations.append(ship)
 
-                # ships_locations = [(x1, x2, y1, y2, ship_size), ...]
-                # print self.my_ships_locations
+                # Now "ships_locations" are in following format - [(x1, x2, y1, y2, ship_size), ...]
 
                 # Block "Place ships" button
                 self.place_ships_b.config(state=DISABLED)
@@ -1235,9 +1089,7 @@ class GUI(object):
                 error_msg = error_code_to_string(resp_code)
                 self.add_notification(error_msg)
 
-        # +
         elif command == COMMAND.MAKE_HIT:
-
             # In case requested map doesn't exist, then close all windows, and redirect to maps list
             if resp_code == RESP.MAP_DOES_NOT_EXIST:
                 self.add_notification("Map doesn't exist")
@@ -1257,26 +1109,25 @@ class GUI(object):
 
             elif resp_code == RESP.OK:
                 # hit - can be successful(1) or not (0)
-                target_row, target_column, hit, damaged_player_id = parse_data(data)
+                target_row, target_column, hit, damaged_player_id, game_finished = parse_data(data)
 
                 # Update battlefield in pygame
                 self.mark_cell(target_row, target_column, hit, damaged_player_id)
 
                 if hit == "1":
                     self.add_notification("Shot was successful")
-                    with lock:
-                        self.my_turn_to_move = True
+
+                    # If game is not finished yet, player can move
+                    if game_finished == "0":
+                        with lock:
+                            self.my_turn_to_move = True
                 else:
                     self.add_notification("It was missing shot")
-
-                    # TODO: Check whether ship is completely sank
-
             else:
                 # Update notification area
                 error_msg = error_code_to_string(resp_code)
                 self.add_notification(error_msg)
 
-        # +
         elif command == COMMAND.DISCONNECT_FROM_GAME:
             map_id = data
 
@@ -1292,11 +1143,10 @@ class GUI(object):
                 self.choose_map_window()
                 self.add_notification("You disconnected successfully")
 
-        # +
         elif command == COMMAND.QUIT_FROM_GAME:
             map_id, map_name = parse_data(data)
 
-            # Destroy Pygame window, and players window
+            # Destroy PyGame window, and players window
             self.destroy_previous_root()
             with lock:
                 self.pygame_done = True
@@ -1305,7 +1155,6 @@ class GUI(object):
             self.choose_map_window()
             self.add_notification("You quitted successfully from map \"%s\"" % map_name)
 
-        # +
         elif command == COMMAND.START_GAME:
             if resp_code == RESP.OK:
                 # Mark that it's creator map turn to make shot
@@ -1324,6 +1173,13 @@ class GUI(object):
                 self.add_notification("Not enough players with placed ships to start the game"
                                       "(needs at least 2 players in total with placed ships)!")
 
+            # Admin still haven't placed his ships
+            elif resp_code == RESP.YOU_DID_NOT_PLACE_SHIPS:
+                # Unblock "Start game" button
+                self.start_game_b.config(state=NORMAL)
+
+                self.add_notification("You still haven't placed ships!")
+
             else:
                 # Unblock "Start game" button
                 self.start_game_b.config(state=NORMAL)
@@ -1337,11 +1193,12 @@ class GUI(object):
 
             if resp_code == RESP.OK:
                 nickname = self.players_on_map[player_id]["name"]
-                # Remove player player list
-                # del self.players_on_map[player_id]
 
                 # Update list of players
                 self.mark_player_in_list(player_nickname=nickname, kicked=True)
+
+                # Unblock button "kick player"
+                self.kick_player_b.config(state=NORMAL)
 
                 self.add_notification("Player \"%s\" was successfully kicked" % nickname)
 
@@ -1352,8 +1209,6 @@ class GUI(object):
                 self.add_notification("You can't kick player, because minimum number of players on map is 2")
 
         elif command == COMMAND.SPECTATOR_MODE:
-
-            # TODO: Block some buttons
             if data != "":
                 info = parse_data(data)
                 self.spectator_mode_b.config(state=DISABLED)
@@ -1366,13 +1221,13 @@ class GUI(object):
                 self.spectator_mode_b.config(state=NORMAL)
                 self.add_notification("No ships on the map (so you can't go into spectator mode)")
 
-        # +
         elif command == COMMAND.PLAYERS_ON_MAP:
             # Compressed data in format (map_id, player_id, nickname, disconnected)
             info = parse_data(data)
 
-            # Clean list of current players
-            # self.players_l.delete(FIRST, END)
+            # Delete previous players on map
+            self.players_l.delete(0, END)
+            print 111
 
             with lock:
                 # Trigger to append current players to the players list
@@ -1407,7 +1262,7 @@ class GUI(object):
                 self.add_notification("List of players on this map ws uploaded successfully")
 
         elif command == COMMAND.MY_SHIPS_ON_MAP:
-            # Compressed data in format
+            # Compressed data in following format:
             # (map_id, row_start, row_end, column_start, column_end, ship_type, totally_sank)
             info = parse_data(data)
 
@@ -1436,7 +1291,6 @@ class GUI(object):
 
             self.add_notification("Your ships locations were uploaded successfully")
 
-        # +
         elif command == COMMAND.EXISTING_SHOTS:
             # Compressed data in format (target_row, target_column, hit_successful, damaged_player_id)
             info = parse_data(data)
@@ -1452,7 +1306,6 @@ class GUI(object):
                 target_row, target_column = info[i + 1], info[i + 2]
                 hit_successful, damaged_player_id = info[i + 3], info[i + 4]
 
-                # print damaged_player_id
                 if damaged_player_id == "":
                     damaged_player_id = None
 
@@ -1474,7 +1327,6 @@ class GUI(object):
         # 11) GAME_FINISHED
         # 12) RESTART_GAME
 
-        # +
         elif command == COMMAND.NOTIFICATION.PLAYER_JOINED_TO_GAME:
             player_id, nickname = parse_data(data)
 
@@ -1499,17 +1351,16 @@ class GUI(object):
                 # GUI update status bar about joined player
                 self.add_notification("New player %s joined to game" % nickname)
 
-        # +
         elif command == COMMAND.NOTIFICATION.ANOTHER_PLAYER_DISCONNECTED:
-            player_id, player_nickname = parse_data(data)
+            map_id, player_id, player_nickname = parse_data(data)
 
-            if player_id in self.players_on_map:
-                self.players_on_map[player_id]["disconnected"] = "1"
+            if map_id == self.selected_map_id:
+                if player_id in self.players_on_map:
+                    self.players_on_map[player_id]["disconnected"] = "1"
 
-            # Mark player with gray color (means he is disconnected)
-            self.mark_player_in_list(player_nickname, disconnected=True)
+                # Mark player with gray color (means he is disconnected)
+                self.mark_player_in_list(player_nickname, disconnected=True)
 
-        # +
         elif command == COMMAND.NOTIFICATION.YOUR_SHIP_WAS_DAMAGED:
             # Update battlefield in pygame
             map_id, initiator_id, target_row, target_column = parse_data(data)
@@ -1524,15 +1375,19 @@ class GUI(object):
                 # Update notification area
                 self.add_notification(msg)
 
-        # +
         elif command == COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT:
-            map_id, initiator_id, initiator_nickname, row, column = parse_data(data)
+            map_id, initiator_id, initiator_nickname, row, column, am_i_spectator, hit, damaged_player_id = parse_data(data)
 
-            # print map_id, "<<<<<<<<<<>>>>>>>", self.selected_map_id
             if map_id == self.selected_map_id:
                 # Mark cell on the map in pygame
-                # hit - "0"  # because player shouldn't know about it
-                self.mark_cell(row, column, hit_successful="0")
+                # If I'm spectator, then I should see all shots (both successful and missed shots)
+                if am_i_spectator == "1":
+                    self.mark_cell(row, column, hit_successful=hit, damaged_player_id=damaged_player_id)
+
+                # If I'm not spectator, player shouldn't know about whether the shot successful or not
+                # (that's why hit - "0")
+                else:
+                    self.mark_cell(row, column, hit_successful="0")
 
                 # Mark player with default color
                 self.mark_player_in_list(initiator_nickname, turn=False)
@@ -1541,7 +1396,6 @@ class GUI(object):
                 msg = command_to_str(command) + "coord(%s,%s)" % (row, column)
                 self.add_notification(msg)
 
-        # +
         elif command == COMMAND.NOTIFICATION.YOUR_TURN_TO_MOVE:
             map_id = data
 
@@ -1550,7 +1404,6 @@ class GUI(object):
                 self.my_turn_to_move = True
 
             msg = "It's your turn to make move"
-            # msg = "It's your turn to make move on map \"%s\"." % self.maps[map_id]["name"]
 
             # Add notification as pop-up window
             tkMessageBox.showinfo("Notification", msg)
@@ -1560,7 +1413,6 @@ class GUI(object):
             player_nickname = data
             self.mark_player_in_list(player_nickname, turn=True)
 
-        # +
         elif command == COMMAND.NOTIFICATION.YOU_ARE_KICKED:
             map_id = data
 
@@ -1569,9 +1421,6 @@ class GUI(object):
 
                 # Reset selected map and its id
                 self.selected_map_id, self.selected_map = None, None
-
-                # Destroy players window
-                # self.players_root.destroy()
 
                 # Destroy battlefield
                 with lock:
@@ -1589,13 +1438,11 @@ class GUI(object):
 
             self.add_notification("Admin kicked player %s" % player_nickname)
 
-        # +
         elif command == COMMAND.NOTIFICATION.SAVE_PLAYER_ID:
             # Save player_id
             with lock:
                 self.client.my_player_id = data
 
-        # +
         elif command == COMMAND.NOTIFICATION.GAME_STARTED:
             map_id = data
 
@@ -1604,7 +1451,6 @@ class GUI(object):
 
                 self.add_notification("Game on the map \"%s\" started!" % map_name)
 
-        # +
         elif command == COMMAND.NOTIFICATION.GAME_FINISHED:
             map_id, map_name, owner_id = parse_data(data)
 
@@ -1624,7 +1470,6 @@ class GUI(object):
                 if owner_id == self.client.my_player_id:
                     self.restart_game_b.config(state=NORMAL)
 
-        # +
         elif command in [COMMAND.RESTART_GAME, COMMAND.NOTIFICATION.RESTART_GAME]:
             # Destroy existing window
             with lock:
@@ -1646,7 +1491,8 @@ class GUI(object):
             map_id, map_name, previous_admin_name, game_started, ships_placed = parse_data(data)
 
             # Unblock button "Start game"
-            if game_started == "0" and ships_placed == "1":
+            if game_started == "0":
+                # and ships_placed == "1"
                 self.start_game_b.config(state=NORMAL)
 
             # Unblock button "Kick player"

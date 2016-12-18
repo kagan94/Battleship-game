@@ -61,11 +61,13 @@ class Player_to_map(BaseModel):
     my_turn = IntegerField()
     kicked = IntegerField()
     spectator_mode = IntegerField()
+    turn_start_time = DateTimeField(default=datetime.datetime.now)
 
     def __str__(self):
-        return "Id:%s, Map_id:%s, player:%s, time_connected:%s, disconnected:%s, my_turn:%s, kicked:%s, spectator_mode:%s"\
-               % (self.id, self.map_id, self.player.nickname, self.time_connected,
-                  self.disconnected, self.my_turn, self.kicked, self.spectator_mode)
+        return "Id:%s, Map_id:%s, player:%s, time_connected:%s, disconnected:%s," \
+               "my_turn:%s, kicked:%s, spectator_mode:%s, turn_start_time:%s"\
+               % (self.id, self.map_id, self.player.nickname, self.time_connected, self.disconnected,
+                  self.my_turn, self.kicked, self.spectator_mode, self.turn_start_time)
 
     # class Meta:
     #     primary_key = CompositeKey('map', 'player')

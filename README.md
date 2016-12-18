@@ -1,7 +1,38 @@
 # Battleship-game
-![SQL db scatch](http://clip2net.com/clip/m527982/94ac0-clip-532kb.png)
 
-![SQL db scatch](http://clip2net.com/clip/m527982/5b1a1-clip-45kb.png)
+## Used technologies:
+* Redis
+* RabbitMQ
+* MySQL
+* Python 2.7
+* Tkinter
+* PyGame
+
+# General view of the game
+![Game window](http://clip2net.com/clip/m527982/a118a-clip-285kb.png)
+
+# Additional screenshots:
+## Register nickname window
+![Register nickname](http://clip2net.com/clip/m527982/0aede-clip-36kb.png)
+
+## Choose server window
+![Choose server window](http://clip2net.com/clip/m527982/344c8-clip-52kb.png)
+
+## Choose map window
+![Choose map window](http://clip2net.com/clip/m527982/841c6-clip-78kb.png)
+
+## Create new map window
+![Create new map window](http://clip2net.com/clip/m527982/5af25-clip-44kb.png)
+
+## Main battlefield window
+![Main battlefield window](http://clip2net.com/clip/m527982/c6564-clip-148kb.png)
+
+## Main battlefield window with several players
+![Main battlefield window with several players](http://clip2net.com/clip/m527982/88b22-clip-247kb.png)
+
+## Structure of database
+![structure of database](http://clip2net.com/clip/m527982/cf8d1-clip-47kb.png)
+
 
 ## Already DONE:
 * Establishment of sql connection + created basic structure of DB + created models for DB (server)
@@ -69,12 +100,4 @@
 * send notification about quit of some player to other players on this map
 * delete quitted player_name from players list (gui)
 * Add notification to other players that this player was kicked (server)
-
-## TODO Server:
-* CLEAN ALL TODOs
-* change admin after timeout (in thread)
-
-## TODO Client:
-* Add "KeyboardInterrupt, SystemExit" after connecting GUI
-
-## TODO GUI:
+* clean all files

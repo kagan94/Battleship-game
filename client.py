@@ -2,10 +2,8 @@
 # -*- coding: utf-8 -*-
 
 # Imports----------------------------------------------------------------------
-import pika  # for Msg Queue
-from pika import exceptions
+import pika  # for RabbitMQ Queue
 
-import uuid  # for generating unique correcaltion_id
 import ConfigParser as CP
 from threading import Thread, Lock
 from argparse import ArgumentParser  # Parsing command line arguments
@@ -65,7 +63,10 @@ class Client(object):
             self.rabbitmq_connection = None
 
     def close_rabbitmq_connection(self):
-        self.rabbitmq_connection.close()
+        try:
+            self.rabbitmq_connection.close()
+        except pika.exceptions.ConnectionClosed:
+            pass
 
     def open_redis_connection(self, host, port):
         #############
@@ -86,11 +87,10 @@ class Client(object):
 
     def send_request(self, query, after_reconnect=False):
         '''
-            Put request into the client queue for server
-            Later server will fetch this query
-
-            :param query: (str) packed command, data in one string
-            :param after_reconnect: (bool) in case of after reconnecting
+        Put request into the client queue for server
+        Later server will fetch this query
+        :param query: (str) packed command, data in one string
+        :param after_reconnect: (bool) in case of after reconnecting
         '''
 
         print "<< Query (%s) put into request queue" % query
@@ -101,7 +101,7 @@ class Client(object):
             self.rabbitmq_channel.basic_publish(exchange='',
                                                 routing_key=request_queue,
                                                 body=query)
-        except exceptions.ConnectionClosed:
+        except pika.exceptions.ConnectionClosed:
             if not after_reconnect:
                 self.open_rabbitmq_connection()
                 self.send_request(query, after_reconnect=True)
@@ -116,7 +116,6 @@ class Client(object):
         ''' Save nickname in local config file '''
         self.nickname = nickname
 
-        # Save nickname in local config
         conf = CP.RawConfigParser()
         conf.add_section("USER_INFO")
         conf.set('USER_INFO', 'nickname', self.nickname)
@@ -159,10 +158,8 @@ class Client(object):
     def register_nickname(self, nickname):
         '''
         Register the nickname provided by player
-
         :param nickname: (str)
         '''
-        # nickname = "my_nicknam1234" + str(uuid.uuid4())
 
         command = COMMAND.REGISTER_NICKNAME
         query = pack_query(command, data=nickname)
@@ -174,7 +171,7 @@ class Client(object):
                                                 reply_to=self.temp_queue_name,
                                                 delivery_mode=2
                                             ))
-        print "Try to register nickname"
+        print "Try to register nickname..."
 
         while self.resp is None:
             self.rabbitmq_connection.process_data_events()
@@ -200,8 +197,9 @@ class Client(object):
     def create_new_game(self, game_name, field_size):
         '''
         Register a new game on the server
-
         :param game_name: (str)
+        :param field_size: (int) desired field size for map that shoule be created
+            (map will have size field_size * field_size)
         '''
 
         # Put query into MQ to register a new game
@@ -211,6 +209,7 @@ class Client(object):
 
     def join_game(self):
         ''' Join to existing game on a server '''
+
         # map that player wants to connect
         map_id = self.gui.selected_map_id
 
@@ -220,13 +219,13 @@ class Client(object):
 
     def place_ships(self):
         ''' Place ships randomly '''
+
         query = pack_query(COMMAND.PLACE_SHIPS, self.selected_server_id, data=self.gui.selected_map_id)
         self.send_request(query)
 
     def make_shot(self, target_row, target_column):
         '''
         Register a new hit on the map
-
         :param map_id: (str)
         :param target_row: (str)
         :param target_column: (str)
@@ -242,6 +241,7 @@ class Client(object):
         '''
         :return: (list) of serves in state on-line
         '''
+
         # Request to get server online from Redis (from hash map)
         # Dictionary of servers online (key:val => server_id:server_name)
         servers = self.redis_conn.hgetall("servers_online")
@@ -256,7 +256,6 @@ class Client(object):
     def available_maps(self):
         '''
         Request to get available maps on the chosen server
-
         :return: (list) of maps
         '''
         query = pack_query(COMMAND.LIST_OF_MAPS, self.selected_server_id)
@@ -343,9 +342,7 @@ class Client(object):
             host, virtual_host = self.rabbitmq["host"], self.rabbitmq["virtual_host"]
             login, password = self.rabbitmq["login"], self.rabbitmq["password"]
 
-        # TODO: Uncomment it in final version
-        # try:
-        if 1:
+        try:
             print "- Start establishing connection to RabbitMQ server."
 
             credentials = pika.PlainCredentials(login, password)
@@ -372,8 +369,8 @@ class Client(object):
             # Close MQ connection if still opened
             if not connection.is_closed:
                 connection.close()
-        # except:
-        #     print "ERROR (in notif. loop): Can't access RabbitMQ server, please check connection parameters."
+        except:
+            print "ERROR (in notif. loop): Can't access RabbitMQ server, please check connection parameters."
 
 
 def main():
@@ -401,8 +398,9 @@ def main():
                         default=REDIS_PORT)
 
     parser.add_argument('-t', '--test', type=int,
-                        help='test on another clients, default - %s' % 1,
-                        default=1)
+                        help='Here you can test to run app on different clients. '
+                             'Just add -t 1 or -t 2, or -t 3, default - %s' % 0,
+                        default=0)
 
     args = parser.parse_args()
 
@@ -429,15 +427,12 @@ def main():
     # Open connection to RabbitMQ server
     client.open_rabbitmq_connection()
 
-    # If connections to RabbitMQ and Rebis were established successfully, run Client
+    # If connections to RabbitMQ and Redis were established successfully, run Client
     if client.rabbitmq_connection and client.redis_conn:
         print "####################"
 
         # Init check name
         client.check_nickname()
-
-        # TODO: In GUI. Add list of available servers which player can choose
-        # print client.available_servers()
 
         # We connected to chosen server
         # client.chosen_server_id = '1'  and client.chosen_server_id
@@ -447,34 +442,26 @@ def main():
             request_queue = 'req_' + client.nickname
             client.rabbitmq_channel.queue_declare(queue=request_queue, durable=True)
 
+            if args.test == 0:
+                pass
 
-            if args.test == 1:
+            elif args.test == 1:
                 client.nickname = 'rrr'
                 client.selected_server_id = '2'
                 client.my_player_id = 45
-                gui.selected_map_id = '83'
-                gui.field_size = 20
 
             elif args.test == 2:
                 client.nickname = 'ff'
                 client.selected_server_id = '2'
                 client.my_player_id = 49
-                gui.selected_map_id = '83'
-                gui.field_size = 20
 
             else:
                 client.nickname = 'sss'
                 client.selected_server_id = '2'
                 client.my_player_id = 46
-                gui.selected_map_id = '83'
-                gui.field_size = 20
 
-            # TODO: UNCOMMENT IT IN FINAL VERSION !!!!!!!!!!!!!
             # Run servers_online window
-            # gui.choose_server_window()
-
-            gui.choose_map_window()
-            # client.join_game()
+            gui.choose_server_window()
 
         else:
             # Launch GUI window to enter nickname (Ask player to enter his nickname)
@@ -485,27 +472,10 @@ def main():
         notifications_thread.setDaemon(True)
         notifications_thread.start()
 
+        # Run notification window (should always be opened)
         gui.notification_window()
 
-    # Create 2 separate threads for asynchronous notifications and for main app
-    # main_app_thread = Thread(name='MainApplicationThread', target=client.main_app_loop)
-    # notifications_thread = Thread(name='NotificationsThread', target=client.notifications_loop)
-    #
-    # # main_app_thread.start()
-    # notifications_thread.start()
-    #
-    #
-    # # !!!! channel.basic_consume(on_register_nickname, queue=resp_nickname_queue)
-    # # client.register_nickname("dsa")
-    #
-    # # gui = GUI(root, client)
-    # # client.gui = gui
-    #
-    # # Blocks until the thread finished the work.
-    # notifications_thread.join()
-    # main_app_thread.join()
-
-    # client.close_rabbitmq_connection()
+    client.close_rabbitmq_connection()
 
     print 'Terminating ...'
 

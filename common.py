@@ -89,7 +89,8 @@ RESP = enum(
     NOT_ENOUGH_PLAYERS='13',  # not enough players to start the game
     YOU_ARE_IN_SPECTATOR_MODE='14',  # player can't play, only see the game
     MIN_NUMBER_OF_PLAYERS='15',  # if number of players on map is too small (case "start game" && "kick player")
-    NOT_ENOUGH_PLAYERS_WITH_PLACED_SHIPS='16'  # to start the game
+    NOT_ENOUGH_PLAYERS_WITH_PLACED_SHIPS='16',  # to start the game
+    YOU_DID_NOT_PLACE_SHIPS='17'  # to start the game
 )
 
 

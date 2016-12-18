@@ -1,20 +1,16 @@
 #! /usr/bin/env python
 # =*= coding: utf=8 =*=
 
-# Setup Python logging ==================================================================================
-# import logging
-
-# FORMAT = '%(asctime)=15s %(levelname)s %(message)s'
-# logging.basicConfig(level=logging.DEBUG, format=FORMAT)
-# LOG = logging.getLogger()
-
-
 # Imports ===============================================================================================
 # Load models to communicate with DB. Variable "db" can be accessed anywhere in this file
 import pika
 import peewee
 
-# Local files
+# from threading import Thread, Lock
+# import time
+# import datetime
+
+# Local imports
 from models import *
 from common import *
 from ship_placement import *
@@ -23,8 +19,8 @@ from argparse import ArgumentParser  # Parsing command line arguments
 from redis import ConnectionPool, Redis  # Redis middleware
 
 
-# TODO: delete in final version
 def DELETE_ALL_QUEUES():
+    ''' Delete all queues in RabbitMQ. It needs just to delete some unnecessary info'''
     import requests
 
     def rest_queue_list(user='guest', password='guest',
@@ -72,7 +68,6 @@ def refresh_db_connection(f):
 
 
 class Main_Server(object):
-
     def __init__(self, server_name):
         self.rabbitmq_connection = None
         self.rabbitmq_channel = None
@@ -82,12 +77,8 @@ class Main_Server(object):
         self.server_name = server_name
         self.server_id = None
 
-        self.my_player_id = None
-
     def server_online(self):
-        '''
-            Put msg into queue "servers_online" to notify about server presence
-        '''
+        ''' Put msg into queue "servers_online" to notify about server presence '''
 
         server = Server.select().where(Server.name == self.server_name)
 
@@ -110,9 +101,7 @@ class Main_Server(object):
             self.redis_conn.hset("servers_online", self.server_id, self.server_name)
 
     def server_offline(self):
-        '''
-            Remove msg from the set "servers_online". It means server off-line
-        '''
+        ''' Remove msg from the set "servers_online". It means server off-line '''
 
         # Server goes off-line (remove server name from the set "servers_online")
         if not self.redis_conn.hexists("servers_online", self.server_id):
@@ -182,6 +171,7 @@ class Main_Server(object):
         :param nickname: (str) - needs to put query into correct queue for particular nickname (player)
         :param query: (str) - compressed query
         '''
+
         print "<< Response sent: %s...." % query[:10]
 
         reply_queue = "resp_" + nickname
@@ -207,7 +197,7 @@ class Main_Server(object):
             # Create queue to put responses for particular user
             self.rabbitmq_channel.queue_declare(queue='resp_' + player.nickname, durable=True)
 
-###################
+    ###################
     # Main functions =====================================================================================
     ###################
     @refresh_db_connection
@@ -254,10 +244,8 @@ class Main_Server(object):
 
     @refresh_db_connection
     def get_damaged_player_id_by_shot(self, map_id, row, column):
-
         # Check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
         # (whether hit was successful or not)
-        # print row, column
         hit_query = Ship_to_map.select().where(Ship_to_map.map == map_id,
                                                # Check by row
                                                Ship_to_map.row_start <= row, Ship_to_map.row_end >= row,
@@ -299,8 +287,11 @@ class Main_Server(object):
         return data
 
     @refresh_db_connection
-    def another_player_made_shot(self, map_id, initiator_id, initiator_nickname, row, column, damaged_player_id):
-        ''' Player made a shot, then notify other players about this shot (except player_id) '''
+    def another_player_made_shot(self, map_id, initiator_id, initiator_nickname, row, column, damaged_player_id, hit):
+        '''
+        Player made a shot, then notify other players about this shot (except player_id).
+        hit - 1 successful, 0 - missed
+        '''
 
         if damaged_player_id == "":
             damaged_player_id = 0
@@ -308,15 +299,13 @@ class Main_Server(object):
         # Get all players on this map (except initiator and disconnected users)
         players_on_map_query = Player_to_map.select().where(
                 Player_to_map.map == map_id,
-                ~(Player_to_map.player << [initiator_id, damaged_player_id]),
-                Player_to_map.disconnected == 0)
-
-        # print "SOMEONE_MADE_SHOT", players_on_map_query.count()
+                ~(Player_to_map.player << [initiator_id, damaged_player_id]))
 
         # Send notification about this move
         for record in players_on_map_query:
+            am_i_spectator = record.spectator_mode
 
-            data = pack_data([map_id, initiator_id, initiator_nickname, row, column])
+            data = pack_data([map_id, initiator_id, initiator_nickname, row, column, am_i_spectator, hit, damaged_player_id])
             query = pack_resp(COMMAND.NOTIFICATION.SOMEONE_MADE_SHOT, RESP.OK, self.server_id, data)
 
             # print record.player.nickname
@@ -332,13 +321,13 @@ class Main_Server(object):
                      (Means have ships on the map, which are not destroyed)
             '''
 
-            query = Ship_to_map.select(Ship_to_map.player_id).distinct().where(
+            query_players = Ship_to_map.select(Ship_to_map.player_id).distinct().where(
                 Ship_to_map.map == map_id,
                 Ship_to_map.totally_sank == "0"
             )
 
             # Return list of remaining_players
-            return [record.player_id for record in query]
+            return [record.player_id for record in query_players]
 
         remaining_players = remaining_players_on_map(map_id)
 
@@ -368,6 +357,12 @@ class Main_Server(object):
         '''
 
         players = Player_to_map.select().where(
+            # exclude players with sink ships
+            Player_to_map.player.in_(
+                Ship_to_map.select(Ship_to_map.player_id).where(
+                    Ship_to_map.map == Player_to_map.map
+                )
+            ),
             Player_to_map.map == map_id,
             Player_to_map.kicked == 0,
             Player_to_map.spectator_mode == 0
@@ -458,18 +453,20 @@ class Main_Server(object):
         '''
         :param map_id: (str)
         :param player_id: (int)
-        :param row: (str) x = coordinate where player made a shot
-        :param column: (str) y = coordinate where player made a shot
+        :param player_nickname: (str)
+        :param target_row: (str) x = coordinate where player made a shot
+        :param target_column: (str) y = coordinate where player made a shot
 
         "packed data" contains target_row, target_column,
             hit(result of shot. 0 = missed, 1 = hit), damaged_player_id
 
         :return: (enum) = response code, packed data (str)
         '''
-        # map_id, row, column = [int(v) for v in [map_id, row, column]]
+
         # is_game_end can be "0" or "1"
         resp_code = RESP.OK
         hit, damaged_player_id = "0", ""
+        game_finished = False
 
         hit_record = None
 
@@ -485,7 +482,6 @@ class Main_Server(object):
 
         # Register new shot
         else:
-
             #####################
             # Check if someone stayed in this region, if yes hit = 1, otherwise hit = 0
             # (whether hit was successful or not)
@@ -556,7 +552,8 @@ class Main_Server(object):
 
             #######################################
             # Notify other players about this shot in any case
-            self.another_player_made_shot(map_id, player_id, player_nickname, target_row, target_column, damaged_player_id)
+            self.another_player_made_shot(
+                map_id, player_id, player_nickname, target_row, target_column, damaged_player_id, hit)
 
             #######################################
             # Notify other players about next turn to move
@@ -584,7 +581,10 @@ class Main_Server(object):
                     query = pack_resp(COMMAND.NOTIFICATION.GAME_FINISHED, RESP.OK, self.server_id, data)
                     self.send_response(nickname=record.player.nickname, query=query)
 
-        data = pack_data([target_row, target_column, hit, damaged_player_id])
+        # If the game finished, player can't make shots any more
+        game_finished = "1" if game_finished else "0"
+
+        data = pack_data([target_row, target_column, hit, damaged_player_id, game_finished])
 
         return resp_code, data
 
@@ -632,12 +632,23 @@ class Main_Server(object):
             Player_to_map.spectator_mode == 0
         )
 
-        total_players_with_placed_ships = Ship_to_map.select().distinct(Ship_to_map.player).where(
-                    Ship_to_map.map == map_id
+        total_players_with_placed_ships = Ship_to_map.select(Ship_to_map.player).distinct().where(
+                    Ship_to_map.map == map_id,
+                    Ship_to_map.player.in_(all_players.select(Player_to_map.player).distinct())
+
         ).count()
 
+        my_own_ships = Ship_to_map.select().distinct(Ship_to_map.player).where(
+                    Ship_to_map.map == map_id,
+                    Ship_to_map.player == initiator_id
+        ).count()
+
+        # Owner still haven't placed his ships
+        if my_own_ships == 0:
+            resp_code = RESP.YOU_DID_NOT_PLACE_SHIPS
+
         # Not enough players to start the game
-        if all_players.count() < 2:
+        elif all_players.count() < 2:
             resp_code = RESP.NOT_ENOUGH_PLAYERS
 
         elif total_players_with_placed_ships < 2:
@@ -671,13 +682,22 @@ class Main_Server(object):
                     )
                 ),
                 Player_to_map.map_id == map_id,
-                Player_to_map.player != initiator_id
+                Player_to_map.player != initiator_id,
+                Player_to_map.spectator_mode != 1
             )
 
             # These players will be kicked now
-            for p in players_to_kick:
+            for record in players_to_kick:
                 # Trigger notification method to notify kicked player
-                self.notify_about_kick(map_id, p.player.nickname)
+                self.kick_player(map_id, player_id_to_kick=record.player)
+                # self.notify_about_kick(map_id, p.player.nickname)
+
+            # Update time for turn_start_time (to keep tack of elapsed time since player is able to move.
+            # It needs to kick (admin) player if turn_start_time exceeded 30 seconds
+            # Player_to_map.update(turn_start_time=datetime.datetime.now).where(
+            #     Player_to_map.map == map_id,
+            #     Player_to_map.player == initiator_id
+            # )
 
             # Update record in DB that game started
             current_map.game_started = 1
@@ -745,7 +765,7 @@ class Main_Server(object):
         already_joined = Player_to_map.select().where(
             Player_to_map.map == map_id,
             Player_to_map.player == player_id,
-            Player_to_map.kicked != 1  # and player's not kicked
+            Player_to_map.kicked == 0  # and player's not kicked
         )
 
         # Map doesn't exist
@@ -764,7 +784,6 @@ class Main_Server(object):
             if ships_placed:
                 ships_already_placed = "1"
 
-            # print already_joined.count() > 0, already_joined.get().spectator_mode == 1, already_joined.count(), already_joined.get().spectator_mode
             ###########
             # Game finished (negative response)
             if game_started == 2:
@@ -798,6 +817,8 @@ class Main_Server(object):
 
             elif game_started == 0 and not already_joined.count() > 0:
 
+                print "already_joined", already_joined, already_joined.count() > 0
+
                 # Exceeding limit of players
                 if all_players.count() + 1 > map_info.max_players:
                     data = map_info.name
@@ -826,7 +847,6 @@ class Main_Server(object):
         '''
         :return: (data) - packed data in format (map_id, map_name, rows, columns)
         '''
-        data = ""
         maps_data = []
 
         # Get all games which have not been started yet
@@ -883,7 +903,6 @@ class Main_Server(object):
     @refresh_db_connection
     def players_on_map(self, player_id, map_id):
         ''' Return a compressed string (list of current players on requested map) '''
-
         players_data = []
 
         # Get all players on map except who requested this command
@@ -901,7 +920,6 @@ class Main_Server(object):
                 players_data.append(str(el[0]))
 
         data = pack_data(players_data)
-
         return data
 
     @refresh_db_connection
@@ -945,7 +963,7 @@ class Main_Server(object):
         # Send notification to remaining players about current player disconnection
         for p in remaining_players:
             query = pack_resp(COMMAND.NOTIFICATION.ANOTHER_PLAYER_DISCONNECTED,
-                              RESP.OK, self.server_id, data=pack_data([player_id, player_nickname]))
+                              RESP.OK, self.server_id, data=pack_data([map_id, player_id, player_nickname]))
             self.send_response(p.player.nickname, query)
 
         return resp_code
@@ -1129,18 +1147,22 @@ class Main_Server(object):
     def notify_all_players_about_next_turn(self, map_id):
         ''' Send notification to all players on the map (except player who's turn to move) '''
 
-        player_turn = Player_to_map.get(
-            Player_to_map.map_id == map_id, Player_to_map.my_turn == 1)
+        try:
+            player_turn = Player_to_map.get(
+                Player_to_map.map_id == map_id, Player_to_map.my_turn == 1)
+        except Player_to_map.DoesNotExist:
+            player_turn = None
 
         other_players_on_map = Player_to_map.select().where(
             Player_to_map.map_id == map_id, Player_to_map.my_turn == 0)
 
-        # Put notification about game end into the RabbitMQ
-        for p in other_players_on_map:
-            data = player_turn.player.nickname
+        if player_turn:
+            # Put notification about game end into the RabbitMQ
+            for p in other_players_on_map:
+                data = player_turn.player.nickname
 
-            query = pack_resp(COMMAND.NOTIFICATION.SOMEONE_TURN_TO_MOVE, RESP.OK, self.server_id, data)
-            self.send_response(nickname=p.player.nickname, query=query)
+                query = pack_resp(COMMAND.NOTIFICATION.SOMEONE_TURN_TO_MOVE, RESP.OK, self.server_id, data)
+                self.send_response(nickname=p.player.nickname, query=query)
 
     ###################
     # Handlers for queue ===================================================================================
@@ -1181,7 +1203,6 @@ class Main_Server(object):
 
         print ">> Received command: %s, data: %s" % (command_to_str(command), data)
 
-        # +
         if command == COMMAND.LIST_OF_MAPS:
             resp_code, data = self.list_of_maps(player_id)
             query = pack_resp(command, resp_code, self.server_id, data)
@@ -1191,84 +1212,71 @@ class Main_Server(object):
                 COMMAND.NOTIFICATION.SAVE_PLAYER_ID, RESP.OK, self.server_id, player_id)
             self.send_response(nickname=nickname, query=additional_query)
 
-        # +
         elif command == COMMAND.CREATE_NEW_GAME:
             game_name, field_size = parse_data(data)
 
             resp_code, data = self.create_new_map(owner_id=player_id, name=game_name, size=field_size)
             query = pack_resp(command, resp_code, self.server_id, data)
 
-        # +
         elif command == COMMAND.JOIN_EXISTING_GAME:
             resp_code, data = self.join_game(map_id=data, player_id=player_id, player_nickname=nickname)
             query = pack_resp(command, resp_code, self.server_id, data)
 
-        # +
         elif command == COMMAND.PLACE_SHIPS:
             resp_code, data = place_ships(map_id=data, player_id=player_id)
             query = pack_resp(command, resp_code, self.server_id, data)
 
-        # +
         elif command == COMMAND.MAKE_HIT:
             map_id, row, column = parse_data(data)
 
             resp_code, data = self.make_hit(map_id, player_id, nickname, row, column)
             query = pack_resp(command, resp_code, self.server_id, data)
 
-        # +
         elif command == COMMAND.KICK_PLAYER:
             map_id, player_id_to_kick = parse_data(data)
 
             resp_code, player_id_to_kick = self.kick_player(map_id, player_id_to_kick)
             query = pack_resp(command, RESP.OK, self.server_id, data=player_id_to_kick)
 
-        # +
         elif command == COMMAND.PLAYERS_ON_MAP:
             ''' List of all players on the map (including disconnected)'''
             data = self.players_on_map(player_id, map_id=data)
             query = pack_resp(command, RESP.OK, self.server_id, data)
 
-        # +
         elif command == COMMAND.MY_SHIPS_ON_MAP:
             ''' List of all players on the map (including disconnected)'''
             resp_code, data = self.my_ships_on_map(player_id, map_id=data)
             query = pack_resp(command, resp_code, self.server_id, data)
 
-        # +
         elif command == COMMAND.SPECTATOR_MODE:
             # Spectator mode. Player can see all ships
             # But he can't take part in the game
             data = self.spectator_mode(player_id, map_id=data)
             query = pack_resp(command, RESP.OK, self.server_id, data)
 
-        # +
         elif command == COMMAND.EXISTING_SHOTS:
             # Usually after connecting to existing game, player sends this command
             data = self.existing_shots(map_id=data)
             query = pack_resp(command, RESP.OK, self.server_id, data)
 
-        # +
         elif command == COMMAND.START_GAME:
             map_id = data
 
             resp_code = self.start_game(player_id, map_id)
             query = pack_resp(command, resp_code, self.server_id, map_id)
 
-        # +
         elif command == COMMAND.RESTART_GAME:
             map_id = data
 
             resp_code, data = self.restart_game(map_id)
             query = pack_resp(command, resp_code, self.server_id, data)
 
-        # +
         elif command == COMMAND.DISCONNECT_FROM_GAME:
             map_id = data
 
             resp_code = self.disconnect_from_game(map_id, player_id, nickname)
             query = pack_resp(command, resp_code, self.server_id, data=map_id)
 
-        # +
         elif command == COMMAND.QUIT_FROM_GAME:
             map_id = data
 
@@ -1281,45 +1289,6 @@ class Main_Server(object):
 
         # Remove read msg rom queue
         self.rabbitmq_channel.basic_ack(delivery_tag=method.delivery_tag)
-
-    # nickname = "sdasds"
-    # player_id = Player.get(Player.nickname == nickname).player_id
-    # map_id, row, column = "9", "3", "5"
-
-    # r = register_nickname()
-    # player = Player.select().where(Player.nickname==seached_nickname).get()
-    # print player_id
-
-    # resp_code, hit_result = register_hit(map_id, player_id, row, column)
-    # resp_code, map_id = create_new_map(player_id, "new map 2.0", "25", "30")
-
-    # print resp_code, map_id
-
-    # ================================
-    # map = Map
-    # m = Map.get(Map.owner_id == 3)
-    # map = Player(nickname="sdasds")
-    # m = Map(owner_id=3)
-    # m.save()
-
-    # Map.select().where(Map.owner_id==3)
-
-    # for s in Map.select().where(Map.owner==3):
-    #     print s.map_id, s.owner.player_id, s.owner.nickname
-
-    # print Player_to_map.select()
-    #
-    # for s in Player_hits.select().where(Player_hits.map_id == 8):
-    #     print s.shot_id, s.map_id, s.player_id, s.player.nickname, s.time
-
-    # for s in Invitations.select().where(Invitations.map_id == 8):
-    #     print s.invitation_id, s.map_id, s.initiator_id, s.invited_player_id
-
-    # print s.shot_id, s.map_id, s.player_id, s.player.nickname, s.time
-
-# print 25
-# for s in Map.select().where(Map.owner_id==3):
-#     print s.map_id, s.owner_id
 
 
 ###################
@@ -1353,9 +1322,6 @@ def main():
 
     args = parser.parse_args()
     server_name = args.server_name
-
-    # except KeyboardInterrupt:
-    #     print "Terminating by keyboard interrupt..."
 
     if server_name is None:
         print "Please, specify server name."
@@ -1393,7 +1359,6 @@ def main():
                 # Show clients that server is not online anymore (in Redis)
                 # Mark server off-line (in Redis)
                 server.server_offline()
-
 
 if __name__ == "__main__":
     main()
