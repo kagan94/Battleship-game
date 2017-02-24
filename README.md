@@ -9,29 +9,29 @@
 * PyGame
 
 # General view of the game
-![Game window](http://clip2net.com/clip/m527982/a118a-clip-285kb.png)
+![Game window](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/1.png)
 
 # Additional screenshots:
 ## Register nickname window
-![Register nickname](http://clip2net.com/clip/m527982/0aede-clip-36kb.png)
+![Register nickname](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/8.png)
 
 ## Choose server window
-![Choose server window](http://clip2net.com/clip/m527982/344c8-clip-52kb.png)
+![Choose server window](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/4.png)
 
 ## Choose map window
-![Choose map window](http://clip2net.com/clip/m527982/841c6-clip-78kb.png)
+![Choose map window](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/3.png)
 
 ## Create new map window
-![Create new map window](http://clip2net.com/clip/m527982/5af25-clip-44kb.png)
+![Create new map window](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/6.png)
 
 ## Main battlefield window
-![Main battlefield window](http://clip2net.com/clip/m527982/c6564-clip-148kb.png)
+![Main battlefield window](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/2.png)
 
 ## Main battlefield window with several players
-![Main battlefield window with several players](http://clip2net.com/clip/m527982/88b22-clip-247kb.png)
+![Main battlefield window with several players](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/5.png)
 
 ## Structure of database
-![structure of database](http://clip2net.com/clip/m527982/cf8d1-clip-47kb.png)
+![structure of database](https://raw.githubusercontent.com/kagan94/Battleship-game/master/screenshoots/7.png)
 
 
 ## Already DONE:
